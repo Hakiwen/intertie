@@ -8,5 +8,5 @@
     "rootDir": "packages",
     "outDir": "build/tsc"
   },
-  "include": ["packages/core/src/**/*.ts", "packages/slack-adapter/src/**/*.ts", "packages/matrix-gateway/src/**/*.ts", "packages/conformance/src/**/*.ts"]
+  "include": ["packages/core/src/**/*.ts", "packages/slack-adapter/src/**/*.ts", "packages/matrix-gateway/src/**/*.ts", "packages/teams-adapter/src/**/*.ts", "packages/conformance/src/**/*.ts"]
 }

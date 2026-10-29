@@ -38,6 +38,17 @@ Each line is one action and what should then happen on the other side.
 Screenshots worth taking: steps 1–2 side by side, the thread from steps 3–5, the
 reactions from steps 6–7, and the file from step 9.
 
+If Teams is set up (docs/teams-setup.md), a fourth window **T** shows the Teams channel
+`intertie-demo`:
+
+| # | Do this | Where | Expect |
+|---|---|---|---|
+| t1 | Post `hello from **Teams**` | T | It appears in A, B and M, labelled `(localhost:8714)` |
+| t2 | Reply in the thread of a remote message | T | It lands in that thread everywhere |
+| t3 | React ❤️ on a remote message (one posted by the Intertie bot) | T | ❤️ on the original elsewhere |
+| t4 | React 🎉 on the step-t1 message | A | The Teams copy shows an italic footer `🎉 1`, because Teams bots can't add reactions |
+| t5 | Edit, then delete, your step-t1 message | T | It updates, then disappears, everywhere |
+
 Matrix-side differences, by design (spec/matrix-mapping.md):
 
 - in bot mode, remote reactions show as one bot reaction per emoji;

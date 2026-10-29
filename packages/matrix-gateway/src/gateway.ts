@@ -6,10 +6,10 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import {
-  derivedId, IntertieError, IntertieNode, safeFetch,
+  derivedId, htmlToMd, IntertieError, IntertieNode, mdToHtml, safeFetch, stripReplyFallback,
   type FileRef, type IntertieEvent, type Mention, type NodeOptions, type User,
 } from '@intertie/core';
-import { htmlToMd, mdToHtml, stripReplyFallback } from './format.ts';
+
 import { MatrixApi, MatrixError, type TokenSource } from './matrix-api.ts';
 
 export interface GatewayOptions {

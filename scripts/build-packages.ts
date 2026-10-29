@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const PACKAGES = ['core', 'slack-adapter', 'matrix-gateway', 'conformance'];
+const PACKAGES = ['core', 'slack-adapter', 'matrix-gateway', 'teams-adapter', 'conformance'];
 const root = new URL('..', import.meta.url).pathname;
 const run = (cmd: string, args: string[], cwd = root) => execFileSync(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'inherit'] }).toString();
 

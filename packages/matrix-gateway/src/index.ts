@@ -1,4 +1,4 @@
 export * from './gateway.ts';
-export * from './format.ts';
+export { escapeHtml, htmlToMd, mdToHtml, stripReplyFallback } from '@intertie/core';
 export * from './matrix-api.ts';
 export * from './oauth.ts';

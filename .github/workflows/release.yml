@@ -88,6 +88,7 @@ jobs:
           - { subject: 'intertie-core-VERSION.tgz', sbom: 'intertie-core-VERSION' }
           - { subject: 'intertie-slack-adapter-VERSION.tgz', sbom: 'intertie-slack-adapter-VERSION' }
           - { subject: 'intertie-matrix-gateway-VERSION.tgz', sbom: 'intertie-matrix-gateway-VERSION' }
+          - { subject: 'intertie-teams-adapter-VERSION.tgz', sbom: 'intertie-teams-adapter-VERSION' }
           - { subject: 'intertie-conformance-VERSION.tgz', sbom: 'intertie-conformance-VERSION' }
           - { subject: 'intertie-VERSION-src.tar.gz', sbom: 'intertie-workspace-VERSION' }
     steps:

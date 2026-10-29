@@ -7,3 +7,4 @@ export * from './events.ts';
 export * from './store.ts';
 export * from './node.ts';
 export * from './ops.ts';
+export * from './html.ts';

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- `@intertie/teams-adapter`: Microsoft Teams as a participant.
+  - Azure Bot (single-tenant) with resource-specific consent.
+  - Bot Framework JWT verification (signature, issuer, audience, expiry, `serviceUrl`
+    claim, endorsement, connector host allowlist).
+  - Threads, edits, deletes, reactions (as far as Teams allows), inline images, and
+    `<at>` mentions.
+  - App package generator, validated against Microsoft's v1.25 schema.
+  - `spec/teams-mapping.md`.
+- Shared Markdown ⇄ HTML conversion moved into core.
+
 ## v0.1.0 (2026-10-29)
 
 First release. The protocol is a v0.1 draft, and it may still change in breaking ways

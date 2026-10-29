@@ -19,7 +19,7 @@ Supported versions: the latest release.
 Every downloadable artifact of a release comes with SBOMs and attestations, all produced by
 this repository's `release` workflow:
 
-- the four package tarballs, `intertie-<pkg>-<ver>.tgz`;
+- the five package tarballs, `intertie-<pkg>-<ver>.tgz`;
 - the source archive, `intertie-<ver>-src.tar.gz`.
 
 For each artifact:

@@ -8,7 +8,7 @@ const { values } = parseArgs({ options: { since: { type: 'string' }, out: { type
 const since = values.since ? Date.parse(values.since) : 0;
 type Line = { t: string; level: string; msg: string; side: string; [k: string]: unknown };
 const lines: Line[] = [];
-for (const side of ['a', 'b', 'm']) {
+for (const side of ['a', 'b', 'm', 't']) {
   const p = `state/${side}/adapter.log`;
   if (!existsSync(p)) continue;
   for (const raw of readFileSync(p, 'utf8').split('\n')) {

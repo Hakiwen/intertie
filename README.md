@@ -26,6 +26,8 @@ parties runs. Messages move only between the participating organizations.
 - **Matrix** rooms join through a gateway the org runs itself. It works as an
   Application Service with ghost users on your own homeserver, or as a single bot
   account. See [`spec/matrix-mapping.md`](spec/matrix-mapping.md).
+- **Microsoft Teams** joins through a Teams app the org installs in its own team. See
+  [`spec/teams-mapping.md`](spec/teams-mapping.md).
 - **Slack** can't be a native peer, so the Slack org installs the Intertie app in its
   own workspace. Remote people show up with their name, avatar and org. The ways this
   differs from Slack Connect are listed in [`spec/slack-mapping.md`](spec/slack-mapping.md#what-cannot-map).
@@ -86,6 +88,7 @@ Inside Slack, admins use `/intertie share`, `/intertie accept <invite>`,
 | [`packages/core`](packages/core) | Reference engine: signing, discovery, SSRF-safe fetch, home/peer state machine, pull, files |
 | [`packages/slack-adapter`](packages/slack-adapter) | The Slack app: Socket Mode or Events API, `/intertie`, admin CLI, manifest |
 | [`packages/matrix-gateway`](packages/matrix-gateway) | Matrix rooms: Application Service (ghost users) or bot account; `!intertie`, CLI, registration generator |
+| [`packages/teams-adapter`](packages/teams-adapter) | Microsoft Teams: an Azure Bot with resource-specific consent, Bot Framework JWT verification, an app package generator |
 | [`packages/conformance`](packages/conformance) | Conformance runner for the home and peer roles; signed reports |
 | [`packages/toy-chat`](packages/toy-chat) | A ~130-line native web chat, standing in for "your internal tool" |
 | [`docs/landscape.md`](docs/landscape.md) | Matrix, MIMI, Slack Connect, Mattermost, Teams: what exists, and why a new small protocol |

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { htmlToMd, mdToHtml, stripReplyFallback } from '../src/format.ts';
+import { htmlToMd, mdToHtml, stripReplyFallback } from '@intertie/core';
 
 test('Markdown → Matrix HTML, escaped', () => {
   assert.equal(mdToHtml('**b** *i* ~~s~~ `<c>`').html, '<strong>b</strong> <em>i</em> <del>s</del> <code>&lt;c&gt;</code>');

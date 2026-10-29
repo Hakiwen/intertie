@@ -1,6 +1,6 @@
-// Markdown (GFM-MIMI subset) ⇄ Matrix `org.matrix.custom.html`. See spec/matrix-mapping.md.
-// Outbound HTML is built from escaped text only, so a peer can never inject markup.
-import type { Mention } from '@intertie/core';
+// Markdown (GFM-MIMI subset) ⇄ HTML, shared by the Matrix gateway (org.matrix.custom.html) and the
+// Teams adapter. Outbound HTML is built from escaped text only, so a peer can never inject markup.
+import type { Mention } from './events.ts';
 
 const PH = (i: number) => `\u0000${i}\u0000`;
 const PH_RE = /\u0000(\d+)\u0000/g;
@@ -8,8 +8,14 @@ const SAFE_SCHEME = /^(https?:|mailto:)/i;
 
 export const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-/** Markdown → Matrix HTML. `pillFor` maps an Intertie user id to a Matrix user id on this side. */
-export function mdToHtml(md: string, mentions: Mention[] = [], pillFor: (id: string) => string | null = () => null): { html: string; userIds: string[] } {
+/**
+ * Markdown → HTML. `pillFor` maps an Intertie user id to a native user id on this side; `mention`
+ * renders that user's mention (default: a Matrix pill).
+ */
+export function mdToHtml(
+  md: string, mentions: Mention[] = [], pillFor: (id: string) => string | null = () => null,
+  mention: (nativeId: string, name: string) => string = (mx, name) => `<a href="https://matrix.to/#/${escapeHtml(encodeURI(mx))}">${escapeHtml(name)}</a>`,
+): { html: string; userIds: string[] } {
   const saved: string[] = [];
   const keep = (s: string) => { saved.push(s); return PH(saved.length - 1); };
   const userIds: string[] = [];
@@ -24,7 +30,7 @@ export function mdToHtml(md: string, mentions: Mention[] = [], pillFor: (id: str
     const at = `@${m.name}`;
     const i = s.indexOf(at);
     if (i < 0) continue;
-    s = s.slice(0, i) + keep(`<a href="https://matrix.to/#/${escapeHtml(encodeURI(mx))}">${escapeHtml(m.name)}</a>`) + s.slice(i + at.length);
+    s = s.slice(0, i) + keep(mention(mx, m.name)) + s.slice(i + at.length);
     userIds.push(mx);
   }
   s = escapeHtml(s);
@@ -53,7 +59,7 @@ export function decodeEntities(s: string): string {
  * Matrix HTML → Markdown. Only the tags we understand are translated; every other tag is
  * dropped (its text kept). Pills become `@Name` plus a mention via `idFor`.
  */
-export function htmlToMd(html: string, idFor: (mxid: string) => string): { text: string; mentions: Mention[] } {
+export function htmlToMd(html: string, idFor: (mxid: string) => string, pill: (href: string) => string | null = matrixPill): { text: string; mentions: Mention[] } {
   const mentions: Mention[] = [];
   let s = html.replace(/<mx-reply>[\s\S]*?<\/mx-reply>/gi, '');
   const saved: string[] = [];
@@ -63,9 +69,9 @@ export function htmlToMd(html: string, idFor: (mxid: string) => string): { text:
   s = s.replace(/<a\s[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_m, href: string, label: string) => {
     const url = decodeEntities(href);
     const text = decodeEntities(label.replace(/<[^>]+>/g, ''));
-    const pill = /^https:\/\/matrix\.to\/#\/(@[^/?]+)/.exec(url);
-    if (pill) {
-      const mxid = decodeURIComponent(pill[1]);
+    const who = pill(url);
+    if (who) {
+      const mxid = who;
       const name = text.replace(/^@/, '');
       mentions.push({ id: idFor(mxid), name });
       return keep(`@${name}`);
@@ -79,6 +85,12 @@ export function htmlToMd(html: string, idFor: (mxid: string) => string): { text:
   s = s.replace(/<[^>]+>/g, '');
   s = decodeEntities(s).replace(/\n{3,}/g, '\n\n').trim();
   return { text: s.replace(PH_RE, (_m, i: string) => saved[Number(i)]), mentions };
+}
+
+/** Matrix pills: https://matrix.to/#/@user:server → the user id. */
+export function matrixPill(href: string): string | null {
+  const m = /^https:\/\/matrix\.to\/#\/(@[^/?]+)/.exec(href);
+  return m ? decodeURIComponent(m[1]) : null;
 }
 
 /** Remove the legacy plain-text reply fallback ("> <@user> quoted" lines) from a body. */

@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 ver=$(node -p "require('./package.json').version")
 out=dist/sbom
 rm -rf "$out"; mkdir -p "$out"
-for pkg in core slack-adapter matrix-gateway conformance; do
+for pkg in core slack-adapter matrix-gateway teams-adapter conformance; do
   npm sbom --sbom-format cyclonedx --sbom-type library --omit dev --workspace "@intertie/$pkg" > "$out/intertie-$pkg-$ver.cdx.json"
   npm sbom --sbom-format spdx --sbom-type library --omit dev --workspace "@intertie/$pkg" > "$out/intertie-$pkg-$ver.spdx.json"
 done
