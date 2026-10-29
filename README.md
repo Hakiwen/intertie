@@ -34,7 +34,10 @@ Status: **v0.1 draft, private.**
 
 ## Try it locally (no Slack needed)
 
-You need Node ≥ 22.18. There are no runtime dependencies.
+You need Node ≥ 22.18. There are **0 runtime dependencies**: only Node built-ins. There
+are 9 third-party dev and build packages (TypeScript, `@types/node`, Ajv and its deps).
+Releases ship CycloneDX and SPDX SBOMs plus Sigstore attestations
+([SECURITY.md](SECURITY.md)).
 
 ```sh
 npm install && make check                   # typecheck + tests (fake Slack and fake Matrix end to end, conformance)

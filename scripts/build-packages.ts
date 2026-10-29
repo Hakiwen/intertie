@@ -40,7 +40,7 @@ for (const name of PACKAGES) {
   writeFileSync(join(stage, 'README.md'), `# ${pkg.name}\n\n${pkg.description}\n\nPart of [Intertie](https://github.com/Hakiwen/intertie), an open protocol for shared channels between organizations, with no intermediary. Docs, spec and release verification: see the repository.\n`);
   run('npm', ['pack', '--quiet', '--pack-destination', out], stage);
 }
-const sums = readdirSync(out).filter((f) => f.endsWith('.tgz')).sort()
+const sums = readdirSync(out).filter((f) => f.endsWith('.tgz') || f.endsWith('.tar.gz')).sort()
   .map((f) => `${createHash('sha256').update(readFileSync(join(out, f))).digest('hex')}  ${f}`);
 writeFileSync(join(out, 'SHA256SUMS'), sums.join('\n') + '\n');
 console.log(sums.join('\n'));

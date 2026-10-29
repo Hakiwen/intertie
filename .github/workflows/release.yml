@@ -1,19 +1,24 @@
-# Tag vX.Y.Z → build the package tarballs, generate SBOMs, attest both with Sigstore (keyless,
-# GitHub OIDC), and publish a GitHub Release with tarballs, SBOMs, checksums and attestation bundles.
-# Verify: gh attestation verify <tarball> --owner Hakiwen   (see SECURITY.md)
+# Tag vX.Y.Z → build every downloadable artifact, generate its SBOMs from the lockfile (npm sbom,
+# CycloneDX + SPDX), scan them (OSV-Scanner), attest with Sigstore keyless signing from GitHub OIDC
+# (SLSA build provenance + one SBOM attestation per format per artifact), and publish a GitHub
+# Release with artifacts, SBOMs, checksums and attestation bundles.
+# Verify any artifact: gh attestation verify <file> --owner Hakiwen   (SECURITY.md)
 name: release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch: # dry run: build, smoke, SBOM, scan; no attestations, no release
 permissions:
   contents: read
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write      # create the release
-      id-token: write      # Sigstore keyless signing via GitHub OIDC
-      attestations: write  # store attestations
+      contents: read
+      id-token: write
+      attestations: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -22,16 +27,23 @@ jobs:
         with:
           node-version: 24
       - name: Tag matches package version
+        id: version
         run: |
           v=$(node -p "require('./package.json').version")
-          test "v$v" = "$GITHUB_REF_NAME"
-          echo "VERSION=$v" >> "$GITHUB_ENV"
+          if [ "$GITHUB_EVENT_NAME" = push ]; then test "v$v" = "$GITHUB_REF_NAME"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
       - run: npm ci
       - run: make check
       - name: Build package tarballs (npm pack)
         run: node scripts/build-packages.ts
       - name: Smoke-test the tarballs as a consumer
         run: scripts/smoke-release.sh
+      - name: Source archive of the tagged tree
+        run: |
+          git archive --format=tar.gz --prefix="intertie-$V/" -o "dist/release/intertie-$V-src.tar.gz" HEAD
+          (cd dist/release && sha256sum *.tgz *.tar.gz > SHA256SUMS)
+        env:
+          V: ${{ steps.version.outputs.version }}
       - name: Generate SBOMs (npm sbom, CycloneDX + SPDX)
         run: scripts/sbom.sh
       - name: OSV-Scanner over the SBOMs
@@ -41,47 +53,104 @@ jobs:
             scan
             source
             -L
-            dist/sbom/intertie-workspace-${{ env.VERSION }}.cdx.json
-      - name: SLSA build provenance for the tarballs
+            dist/sbom/intertie-workspace-${{ steps.version.outputs.version }}.cdx.json
+      - name: SLSA build provenance for every artifact
+        if: github.event_name == 'push'
         id: provenance
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0 (provenance mode; attest-build-provenance is deprecated)
         with:
-          subject-path: dist/release/*.tgz
-      - name: SBOM attestation, core
-        id: sbom-core
-        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+          subject-path: |
+            dist/release/*.tgz
+            dist/release/*.tar.gz
+      - if: github.event_name == 'push'
+        run: mkdir -p dist/attestations && cp "${{ steps.provenance.outputs.bundle-path }}" dist/attestations/provenance.sigstore.jsonl
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          subject-path: dist/release/intertie-core-*.tgz
-          sbom-path: dist/sbom/intertie-core-${{ env.VERSION }}.cdx.json
-      - name: SBOM attestation, slack-adapter
-        id: sbom-slack
-        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+          name: dist
+          path: |
+            dist/release/
+            dist/sbom/
+            dist/attestations/
+          if-no-files-found: error
+          retention-days: 7
+
+  sbom-attest:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    strategy:
+      matrix:
+        include:
+          - { subject: 'intertie-core-VERSION.tgz', sbom: 'intertie-core-VERSION' }
+          - { subject: 'intertie-slack-adapter-VERSION.tgz', sbom: 'intertie-slack-adapter-VERSION' }
+          - { subject: 'intertie-matrix-gateway-VERSION.tgz', sbom: 'intertie-matrix-gateway-VERSION' }
+          - { subject: 'intertie-conformance-VERSION.tgz', sbom: 'intertie-conformance-VERSION' }
+          - { subject: 'intertie-VERSION-src.tar.gz', sbom: 'intertie-workspace-VERSION' }
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          subject-path: dist/release/intertie-slack-adapter-*.tgz
-          sbom-path: dist/sbom/intertie-slack-adapter-${{ env.VERSION }}.cdx.json
-      - name: SBOM attestation, matrix-gateway
-        id: sbom-matrix
-        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+          name: dist
+          path: dist
+      - name: Resolve names
+        id: n
+        env:
+          V: ${{ needs.build.outputs.version }}
+          SUBJECT: ${{ matrix.subject }}
+          SBOM: ${{ matrix.sbom }}
+        run: |
+          echo "subject=dist/release/${SUBJECT//VERSION/$V}" >> "$GITHUB_OUTPUT"
+          echo "sbom=dist/sbom/${SBOM//VERSION/$V}" >> "$GITHUB_OUTPUT"
+          echo "slug=${SBOM//-VERSION/}" >> "$GITHUB_OUTPUT"
+      - name: SBOM attestation (CycloneDX)
+        id: cdx
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0 (SBOM mode; attest-sbom is deprecated)
         with:
-          subject-path: dist/release/intertie-matrix-gateway-*.tgz
-          sbom-path: dist/sbom/intertie-matrix-gateway-${{ env.VERSION }}.cdx.json
-      - name: SBOM attestation, conformance
-        id: sbom-conformance
-        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+          subject-path: ${{ steps.n.outputs.subject }}
+          sbom-path: ${{ steps.n.outputs.sbom }}.cdx.json
+      - name: SBOM attestation (SPDX)
+        id: spdx
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0 (SBOM mode; attest-sbom is deprecated)
         with:
-          subject-path: dist/release/intertie-conformance-*.tgz
-          sbom-path: dist/sbom/intertie-conformance-${{ env.VERSION }}.cdx.json
+          subject-path: ${{ steps.n.outputs.subject }}
+          sbom-path: ${{ steps.n.outputs.sbom }}.spdx.json
+      - name: Keep the bundles
+        run: |
+          mkdir -p bundles
+          cp "${{ steps.cdx.outputs.bundle-path }}" "bundles/${{ steps.n.outputs.slug }}.sbom-cyclonedx.sigstore.jsonl"
+          cp "${{ steps.spdx.outputs.bundle-path }}" "bundles/${{ steps.n.outputs.slug }}.sbom-spdx.sigstore.jsonl"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bundles-${{ steps.n.outputs.slug }}
+          path: bundles/
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'push'
+    needs: [build, sbom-attest]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: artifacts
       - name: Publish the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          mkdir -p dist/attestations
-          cp "${{ steps.provenance.outputs.bundle-path }}" dist/attestations/provenance.intoto.jsonl
-          cp "${{ steps.sbom-core.outputs.bundle-path }}" dist/attestations/sbom-core.intoto.jsonl
-          cp "${{ steps.sbom-slack.outputs.bundle-path }}" dist/attestations/sbom-slack-adapter.intoto.jsonl
-          cp "${{ steps.sbom-matrix.outputs.bundle-path }}" dist/attestations/sbom-matrix-gateway.intoto.jsonl
-          cp "${{ steps.sbom-conformance.outputs.bundle-path }}" dist/attestations/sbom-conformance.intoto.jsonl
+          mkdir -p dist && cp -r artifacts/dist/* dist/
+          cp artifacts/bundles-*/*.jsonl dist/attestations/
           node scripts/release-notes.ts "$TAG" > dist/release-notes.md
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Intertie $TAG" --notes-file dist/release-notes.md \
-            dist/release/*.tgz dist/release/SHA256SUMS dist/sbom/*.json dist/attestations/*.jsonl
+            dist/release/* dist/sbom/*.json dist/attestations/*.jsonl
