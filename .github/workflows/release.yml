@@ -57,7 +57,7 @@ jobs:
       - name: SLSA build provenance for every artifact
         if: github.event_name == 'push'
         id: provenance
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0 (provenance mode; attest-build-provenance is deprecated)
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.1.0 (provenance mode; attest-build-provenance is deprecated)
         with:
           subject-path: |
             dist/release/*.tgz
@@ -108,13 +108,13 @@ jobs:
           echo "slug=${SBOM//-VERSION/}" >> "$GITHUB_OUTPUT"
       - name: SBOM attestation (CycloneDX)
         id: cdx
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0 (SBOM mode; attest-sbom is deprecated)
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.1.0 (SBOM mode; attest-sbom is deprecated)
         with:
           subject-path: ${{ steps.n.outputs.subject }}
           sbom-path: ${{ steps.n.outputs.sbom }}.cdx.json
       - name: SBOM attestation (SPDX)
         id: spdx
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0 (SBOM mode; attest-sbom is deprecated)
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.1.0 (SBOM mode; attest-sbom is deprecated)
         with:
           subject-path: ${{ steps.n.outputs.subject }}
           sbom-path: ${{ steps.n.outputs.sbom }}.spdx.json
