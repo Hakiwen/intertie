@@ -20,6 +20,15 @@ keys and an endpoint. Toward Slack it is a bot:
 The adapter links each Slack channel to at most one Intertie channel, and only for
 channels its admin explicitly links. It ignores events from every other channel.
 
+**Vouching.** The org vouches only for its own workspace's people. If a linked channel
+is *also* a Slack Connect channel, people from other workspaces (`user_team` or
+`users.info.team_id` ≠ the app's team) are not relayed, and the channel is told why,
+once. This is the Slack counterpart of the Matrix gateway's `localServers` rule.
+
+**Escaping.** Every remote string the adapter posts goes through `&`/`<`/`>` escaping:
+message text, display names in notices, org names and file names. This keeps remote
+input from producing Slack markup.
+
 **Identifiers:**
 
 | Intertie | Slack |

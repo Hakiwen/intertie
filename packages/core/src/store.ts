@@ -108,6 +108,23 @@ export class Store {
       .all(channel, since, upTo, limit) as { json: string }[];
     return rows.map((r) => JSON.parse(r.json));
   }
+  /** Purge a deleted message's content: text, mentions and files are blanked; the event shell stays for ordering. */
+  purgeMessage(channel: string, id: string): void {
+    const row = this.eventById(channel, id);
+    if (!row || row.type !== 'message.create') return;
+    const ev = JSON.parse(row.json) as IntertieEvent;
+    const files = ((ev.body as { files?: { id: string }[] }).files ?? []).map((f) => f.id);
+    const thread = (ev.body as { thread?: string }).thread;
+    ev.body = { text: '', deleted: true, ...(thread ? { thread } : {}) } as never;
+    this.db.prepare('update events set json = ? where channel = ? and id = ?').run(JSON.stringify(ev), channel, id);
+    for (const f of files) this.db.prepare('delete from files where id = ? and channel = ?').run(f, channel);
+    for (const e of this.db.prepare("select id, json from events where channel = ? and type = 'message.edit' and target = ?").all(channel, id) as { id: string; json: string }[]) {
+      const ed = JSON.parse(e.json) as IntertieEvent;
+      ed.body = { target: id, text: '(deleted)' } as never;
+      this.db.prepare('update events set json = ? where channel = ? and id = ?').run(JSON.stringify(ed), channel, e.id);
+    }
+  }
+
   /** Drop events older than the retention horizon, never the newest one per channel. */
   pruneEvents(beforeIso: string): void {
     this.db.prepare(`delete from events where json ->> '$.ts' < ? and seq < (select max(seq) from events e2 where e2.channel = events.channel)`).run(beforeIso);

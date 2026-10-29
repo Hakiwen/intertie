@@ -244,6 +244,9 @@ Native thread rendering is the `threads` capability.
 - When a receiver applies an edit, it replaces the displayed text.
 - When a receiver applies a delete, it MUST stop displaying the content. It SHOULD
   purge the stored content, subject to its own legal holds.
+- A purged `message.create` keeps its place in the log as
+  `body: { "text": "", "deleted": true }`, keeping `thread` if it had one. A home that
+  has purged content serves that shell when peers pull. Receivers treat it as deleted.
 - An edit or delete whose target is unknown is accepted and ignored.
 
 **Unknown types and fields.** Receivers MUST ignore event types and body fields they
@@ -287,9 +290,11 @@ Then the home marks the token used, adds the org as a peer, and responds `200`:
 After that, the home sequences a `peer.join` event, here as seq 42.
 
 - The new peer receives events with `seq` greater than `channel.seq`. There is no
-  history from before the join.
-- A repeat accept from an org that is already a peer returns the same channel and
-  never `404`.
+  history from before the join, and the home MUST enforce that on pull as well: it
+  never returns a peer events from before its `peer.join`, whatever `since` asks for.
+- A repeat accept from an org that is already an *active* peer returns the same
+  channel and never `404`. A token is single-use in every other case, so an org that
+  left or was removed needs a new invite.
 - An invalid token returns `404 invalid_invite`.
 
 The peer's `delivery` value (§7) overrides the one in its discovery document for this

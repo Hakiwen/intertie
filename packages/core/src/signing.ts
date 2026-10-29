@@ -126,16 +126,29 @@ export function splitKeyid(keyid: string): { org: string; kid: string } {
 export class NonceCache {
   private seen = new Map<string, number>();
   private lastSweep = 0;
-  /** Returns false if the nonce was already seen. */
+  private max: number;
+  constructor(max = 200_000) { this.max = max; }
+  private sweep(nowS: number): void {
+    if (nowS - this.lastSweep <= 60 && this.seen.size < this.max) return;
+    for (const [k, exp] of this.seen) if (exp < nowS) this.seen.delete(k);
+    // Still full of live entries: drop the oldest (insertion order). Only verified requests get here.
+    while (this.seen.size >= this.max) this.seen.delete(this.seen.keys().next().value!);
+    this.lastSweep = nowS;
+  }
+  /** True if the nonce was seen for this keyid within the TTL. */
+  has(keyid: string, nonce: string, nowS: number): boolean {
+    const exp = this.seen.get(`${keyid} ${nonce}`);
+    return exp !== undefined && exp >= nowS;
+  }
+  /** Remember a nonce. Call only after the signature verified, so forged requests cost no memory. */
+  remember(keyid: string, nonce: string, nowS: number): void {
+    this.sweep(nowS);
+    this.seen.set(`${keyid} ${nonce}`, nowS + NONCE_TTL_S);
+  }
+  /** Check-and-remember in one step (tests and simple callers). */
   check(keyid: string, nonce: string, nowS: number): boolean {
-    if (nowS - this.lastSweep > 60) {
-      for (const [k, exp] of this.seen) if (exp < nowS) this.seen.delete(k);
-      this.lastSweep = nowS;
-    }
-    const k = `${keyid} ${nonce}`;
-    const exp = this.seen.get(k);
-    if (exp !== undefined && exp >= nowS) return false;
-    this.seen.set(k, nowS + NONCE_TTL_S);
+    if (this.has(keyid, nonce, nowS)) return false;
+    this.remember(keyid, nonce, nowS);
     return true;
   }
 }
@@ -150,6 +163,8 @@ export interface VerifyOptions {
   resolveKey: (org: string, kid: string, refresh: boolean) => Promise<KeyObject | null>;
   nonces: NonceCache;
   nowS?: number;
+  /** Reject keyids whose org is not a valid org name before any lookup (no fetches for junk). */
+  isValidOrg?: (org: string) => boolean;
 }
 
 function header(h: VerifyOptions['headers'], name: string): string | undefined {
@@ -167,7 +182,8 @@ export async function verifyRequest(o: VerifyOptions): Promise<{ org: string; ki
   const now = o.nowS ?? Math.floor(Date.now() / 1000);
   if (Math.abs(now - input.created) > SIGNATURE_WINDOW_S) throw new IntertieError('stale_signature');
   const { org, kid } = splitKeyid(input.keyid);
-  if (!o.nonces.check(input.keyid, input.nonce, now)) throw new IntertieError('replayed');
+  if (o.isValidOrg && !o.isValidOrg(org)) throw new IntertieError('bad_signature', 'keyid org is not a valid org name');
+  if (o.nonces.has(input.keyid, input.nonce, now)) throw new IntertieError('replayed');
   let key = await o.resolveKey(org, kid, false);
   if (!key) key = await o.resolveKey(org, kid, true);
   if (!key) throw new IntertieError('unknown_key', `no key ${input.keyid}`);
@@ -184,5 +200,6 @@ export async function verifyRequest(o: VerifyOptions): Promise<{ org: string; ki
   if (!edVerify(null, Buffer.from(base, 'utf8'), key, Buffer.from(sm[1], 'base64'))) {
     throw new IntertieError('bad_signature');
   }
+  o.nonces.remember(input.keyid, input.nonce, now);
   return { org, kid };
 }

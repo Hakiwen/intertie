@@ -69,6 +69,7 @@ export class DiscoveryClient {
   private now(): number { return this.o.now ? this.o.now() : Date.now(); }
 
   private async load(org: string): Promise<CacheEntry> {
+    if (!isOrgName(org, this.o.devInsecure)) throw new IntertieError('unknown_key', `invalid org name ${JSON.stringify(org)}`);
     let doc: unknown;
     let maxAge: number | undefined;
     if (this.o.fetchDoc) {

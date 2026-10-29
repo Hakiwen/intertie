@@ -11,7 +11,7 @@ export interface FileRef {
 }
 
 export interface Bodies {
-  'message.create': { text: string; thread?: string; mentions?: Mention[]; files?: FileRef[] };
+  'message.create': { text: string; thread?: string; mentions?: Mention[]; files?: FileRef[]; deleted?: true };
   'message.edit': { target: string; text: string; mentions?: Mention[] };
   'message.delete': { target: string };
   'reaction.add': { target: string; emoji: string; name?: string };
@@ -117,7 +117,7 @@ export function validateEvent(e: unknown): IntertieEvent {
   switch (ev.type) {
     case 'message.create':
       needSender();
-      checkText(b.text, b.files !== undefined);
+      checkText(b.text, b.files !== undefined || b.deleted === true);
       if (b.thread !== undefined && (!isStr(b.thread) || !EVENT_ID_RE.test(b.thread))) fail('bad thread');
       checkMentions(b.mentions);
       checkFiles(b.files);

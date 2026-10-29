@@ -11,7 +11,7 @@ export interface FakeMsg {
 export interface FakeFile { id: string; name: string; mimetype: string; bytes: Buffer }
 export interface Team {
   id: string; token: string; botUserId: string; botId: string; signingSecret: string; eventsUrl?: string;
-  users: Record<string, { name: string; admin?: boolean }>;
+  users: Record<string, { name: string; admin?: boolean; team?: string }>;
   /** Socket Mode: events go over a WebSocket instead of HTTP. */
   appToken?: string;
   socket?: Duplex;
@@ -183,7 +183,7 @@ export class FakeSlack {
       case 'users.info': {
         const u = t.users[p.user];
         if (!u) return json({ ok: false, error: 'user_not_found' });
-        return json({ ok: true, user: { id: p.user, name: u.name.toLowerCase(), is_admin: !!u.admin, profile: { display_name: u.name, real_name: u.name, image_192: `https://avatars.example/${p.user}.png` } } });
+        return json({ ok: true, user: { id: p.user, team_id: u.team ?? t.id, name: u.name.toLowerCase(), is_admin: !!u.admin, profile: { display_name: u.name, real_name: u.name, image_192: `https://avatars.example/${p.user}.png` } } });
       }
       case 'conversations.info': return ch(p.channel) ? json({ ok: true, channel: { id: p.channel, name: p.channel.toLowerCase(), is_private: false, topic: { value: '' } } }) : json({ ok: false, error: 'channel_not_found' });
       case 'conversations.join': return json({ ok: true });

@@ -28,7 +28,7 @@ const remote = (t: Team, ch: string) => slack.messages(t, ch).filter((m) => m.bo
 
 before(async () => {
   await slack.start();
-  A = slack.addTeam('ACME', { UANA: { name: 'Ana', admin: true }, UAL: { name: 'Al' } }, [CA, 'COTHER']);
+  A = slack.addTeam('ACME', { UANA: { name: 'Ana', admin: true }, UAL: { name: 'Al' }, UEXT: { name: 'Eve', team: 'TOTHERCO' } }, [CA, 'COTHER']);
   B = slack.addTeam('GLOBEX', { UGAIL: { name: 'Gail', admin: true }, UGUS: { name: 'Gus' } }, [CB]);
   a = await adapter(A);
   b = await adapter(B);
@@ -126,10 +126,18 @@ test('unlinked channels are never forwarded', async () => {
   assert.equal(remote(B, CB).length, before);
 });
 
+test('Slack Connect guests from other workspaces are not relayed as this org', async () => {
+  const before = remote(B, CB).length;
+  slack.userPost(A, CA, 'UEXT', 'I am from another company');
+  await settled();
+  assert.equal(remote(B, CB).length, before);
+  assert.ok(slack.messages(A, CA).some((m) => m.text.includes('only relays people from this workspace')));
+});
+
 test('a native Intertie org joins too, and cannot inject Slack markup', async () => {
   const port = await freePort();
   const org = `localhost:${port}`;
-  const native = new IntertieNode({ org, endpoint: `http://${org}/intertie`, keys: [generateKey('k1')], devInsecure: true, retryBaseMs: 20, retryCapMs: 200 });
+  const native = new IntertieNode({ org, endpoint: `http://${org}/intertie`, keys: [generateKey('k1')], devInsecure: true, retryBaseMs: 20, retryCapMs: 200, displayName: '<!channel> URGENT <https://evil.example|re-login>' });
   await native.listen(port);
   native.start();
   try {
@@ -137,6 +145,8 @@ test('a native Intertie org joins too, and cannot inject Slack markup', async ()
     await native.accept(invite);
     await native.send(channel, { type: 'message.create', sender: { id: `mal@${org}`, name: 'Ana' }, body: { text: '<!channel> <@UANA> **urgent** [x](javascript:alert(1)) @Ana', mentions: [{ id: 'UANA@' + a.node.org, name: 'Ana' }] } });
     await until(() => remote(A, CA).some((m) => m.username?.includes(org)), 5000, 'native message in Slack A');
+    const join = slack.messages(A, CA).filter((m) => m.text.includes('joined this shared channel')).at(-1)!;
+    assert.ok(!join.text.includes('<!channel>') && join.text.includes('&lt;!channel&gt;'), `join notice escaped: ${join.text}`);
     const m = remote(A, CA).find((x) => x.username?.includes(org))!;
     assert.equal(m.username, `Ana (${org})`, 'the org is always shown next to the name');
     assert.equal(m.text, '&lt;!channel&gt; &lt;@UANA&gt; *urgent* [x](javascript:alert(1)) <@UANA>');

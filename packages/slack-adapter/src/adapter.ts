@@ -6,7 +6,7 @@ import {
   derivedId, IntertieError, IntertieNode, type FileRef, type IntertieEvent, type Mention, type NodeOptions, type User,
 } from '@intertie/core';
 import { fromSlackReaction, toSlackReaction } from './emoji.ts';
-import { fromMrkdwn, toMrkdwn } from './mrkdwn.ts';
+import { escapeSlack as esc, fromMrkdwn, toMrkdwn } from './mrkdwn.ts';
 import { SlackApi, SlackError } from './slack-api.ts';
 import { SocketModeClient, type Envelope } from './socket-mode.ts';
 
@@ -26,7 +26,7 @@ export interface AdapterOptions {
   maxFileBytes?: number;
 }
 
-interface SlackUser { name: string; avatar?: string; admin: boolean; at: number }
+interface SlackUser { name: string; avatar?: string; admin: boolean; team?: string; at: number }
 
 const CAPABILITIES = ['threads', 'reactions', 'files', 'mentions'];
 const SCHEMA = `
@@ -52,6 +52,7 @@ export class SlackAdapter {
   adminPort = 0;
   private queues = new Map<string, Promise<void>>();
   private pending = 0;
+  private warnedForeign = new Set<string>();
 
   constructor(o: AdapterOptions) {
     this.o = o;
@@ -136,7 +137,7 @@ export class SlackAdapter {
     const ch = await this.node.accept(invite);
     // Linked in the same tick the channel appears, before any delivery can be applied.
     this.link(slackChannel, ch.id);
-    await this.post(slackChannel, `:link: This channel is now shared with *${ch.home}* over Intertie. Messages here are copied to: ${[ch.home, ...ch.participants.map((p) => p.org)].filter((o, i, a) => o !== this.node.org && a.indexOf(o) === i).join(', ')}.`);
+    await this.post(slackChannel, `:link: This channel is now shared with *${esc(ch.home)}* over Intertie. Messages here are copied to: ${esc([ch.home, ...ch.participants.map((p) => p.org)].filter((o, i, a) => o !== this.node.org && a.indexOf(o) === i).join(', '))}.`);
     return { channel: ch.id };
   }
 
@@ -199,6 +200,7 @@ export class SlackAdapter {
       if (sub === 'message_changed') {
         const m = ev.message ?? {};
         if (this.isSelf(m) || m.bot_id) return;
+        if (!(await this.vouchFor({ user: m.user, user_team: m.user_team ?? m.team }, slackChannel!))) return;
         if (m.text === ev.previous_message?.text) return; // reply-count and unfurl updates
         const target = this.eventForTs(channel, m.ts);
         if (!target) return;
@@ -215,6 +217,7 @@ export class SlackAdapter {
       }
       if (sub && !['thread_broadcast', 'file_share', 'me_message'].includes(sub)) return;
       if (this.isSelf(ev) || ev.bot_id || !ev.user) return;
+      if (!(await this.vouchFor(ev, slackChannel!))) return;
       if (this.eventForTs(channel, ev.ts)) return; // already sent (Slack retry)
       const conv = await this.convert(ev.text ?? '');
       let text = sub === 'me_message' ? `*${conv.text}*` : conv.text;
@@ -234,11 +237,27 @@ export class SlackAdapter {
     }
     if (ev.type === 'reaction_added' || ev.type === 'reaction_removed') {
       if (ev.user === this.bot.userId || ev.item?.type !== 'message') return;
+      if (!(await this.vouchFor(ev, slackChannel!))) return;
       const target = this.eventForTs(channel, ev.item.ts);
       if (!target) return;
       const r = fromSlackReaction(ev.reaction);
       return this.node.send(channel, { id, type: ev.type === 'reaction_added' ? 'reaction.add' : 'reaction.remove', sender: await this.sender(ev.user), body: { target, emoji: r.emoji, name: r.name } });
     }
+  }
+
+  /**
+   * This org vouches only for its own workspace's users. In a channel that is also a Slack Connect
+   * channel, people from other workspaces are not relayed as ours (like Matrix localServers).
+   */
+  private async vouchFor(ev: Record<string, any>, slackChannel: string): Promise<boolean> {
+    const team = ev.user_team ?? ev.team ?? (ev.user ? (await this.slackUser(ev.user).catch(() => null))?.team : undefined);
+    if (!team || !this.bot.teamId || team === this.bot.teamId) return true;
+    const k = `${slackChannel}|${ev.user}`;
+    if (!this.warnedForeign.has(k)) {
+      this.warnedForeign.add(k);
+      await this.post(slackChannel, `:warning: Messages from <@${ev.user}> are not shared with the other organizations: this app only relays people from this workspace.`);
+    }
+    return false;
   }
 
   private async convert(text: string): Promise<{ text: string; mentions: Mention[] }> {
@@ -287,10 +306,10 @@ export class SlackAdapter {
         for (const f of (b.files ?? []) as FileRef[]) {
           try {
             const bytes = await this.node.fetchFile(ev, f);
-            await this.slack.uploadFile({ channel: slackChannel, threadTs, filename: f.name, bytes, initialComment: `↑ from ${username}` });
+            await this.slack.uploadFile({ channel: slackChannel, threadTs, filename: f.name, bytes, initialComment: `↑ from ${esc(username)}` });
           } catch (e) {
             this.log('warn', 'file relay failed', { err: String(e) });
-            await this.post(slackChannel, `:warning: ${username} shared *${f.name}* (${f.size} bytes), but it could not be fetched.`, threadTs);
+            await this.post(slackChannel, `:warning: ${esc(username)} shared ${esc(f.name)} (${f.size} bytes), but it could not be fetched.`, threadTs);
           }
         }
         return;
@@ -341,11 +360,11 @@ export class SlackAdapter {
     const self = this.node.org;
     switch (ev.type) {
       case 'peer.join':
-        if (b.org !== self) await this.post(slackChannel, `:link: *${b.display_name ?? b.org}* (${b.org}) joined this shared channel. Messages here are now copied to ${b.org}.`);
+        if (b.org !== self) await this.post(slackChannel, `:link: *${esc(String(b.display_name ?? b.org))}* (${esc(b.org)}) joined this shared channel. Messages here are now copied to ${esc(b.org)}.`);
         return;
       case 'peer.leave':
         if (b.org === self) { await this.post(slackChannel, ':broken_chain: This channel is no longer shared.'); this.unlink(slackChannel); }
-        else await this.post(slackChannel, `:broken_chain: *${b.org}* ${b.reason === 'left' ? 'left' : 'was removed from'} this shared channel.`);
+        else await this.post(slackChannel, `:broken_chain: *${esc(b.org)}* ${b.reason === 'left' ? 'left' : 'was removed from'} this shared channel.`);
         return;
       case 'channel.close':
         await this.post(slackChannel, ':broken_chain: This channel is no longer shared.');
@@ -389,7 +408,7 @@ export class SlackAdapter {
           return void (await reply('Unsharing…'));
         case 'status': {
           const l = this.status().links.find((x) => x.slack_channel === p.channel_id);
-          return void (await reply(l ? `Shared channel \`${l.channel}\` (${l.role}, ${l.state}). Participants: ${l.participants.join(', ') || 'none yet'}. This org: \`${this.node.org}\`.` : `Not shared. This org: \`${this.node.org}\`.`));
+          return void (await reply(l ? `Shared channel \`${l.channel}\` (${l.role}, ${l.state}). Participants: ${esc(l.participants.join(', ')) || 'none yet'}. This org: \`${this.node.org}\`.` : `Not shared. This org: \`${this.node.org}\`.`));
         }
         default:
           return void (await reply('`/intertie share` · `/intertie accept <invite>` · `/intertie status` · `/intertie unshare`'));
@@ -481,12 +500,12 @@ export class SlackAdapter {
   private async slackUser(id: string): Promise<SlackUser> {
     const hit = this.users.get(id);
     if (hit && Date.now() - hit.at < 3600_000) return hit;
-    const r = await this.slack.call<{ user: { name?: string; real_name?: string; is_admin?: boolean; is_owner?: boolean; profile?: { display_name?: string; real_name?: string; image_192?: string } } }>('users.info', { user: id });
+    const r = await this.slack.call<{ user: { team_id?: string; name?: string; real_name?: string; is_admin?: boolean; is_owner?: boolean; profile?: { display_name?: string; real_name?: string; image_192?: string } } }>('users.info', { user: id });
     const p = r.user.profile ?? {};
     const u: SlackUser = {
       name: (p.display_name || p.real_name || r.user.real_name || r.user.name || id).slice(0, 80),
       avatar: p.image_192?.startsWith('https://') ? p.image_192 : undefined,
-      admin: !!(r.user.is_admin || r.user.is_owner), at: Date.now(),
+      admin: !!(r.user.is_admin || r.user.is_owner), team: r.user.team_id, at: Date.now(),
     };
     this.users.set(id, u);
     return u;

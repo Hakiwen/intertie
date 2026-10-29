@@ -4,7 +4,8 @@ import type { Mention } from '@intertie/core';
 const PH = (i: number) => `\u0000${i}\u0000`;
 const PH_RE = /\u0000(\d+)\u0000/g;
 
-const escapeSlack = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+/** Escape plain remote text for Slack (`&`, `<`, `>`): required for every remote string we post. */
+export const escapeSlack = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const unescapeSlack = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 const SAFE_SCHEME = /^(https?:|mailto:)/i;
 

@@ -75,6 +75,12 @@ test('appservice mode: ghosts, threads, edits, redactions, reactions, files, loo
   assert.equal(gEv.content['m.relates_to'].rel_type, 'm.thread');
   assert.equal(gEv.content['m.relates_to'].event_id, a1);
 
+  // A pill to a ghost mentions the remote person by their own Intertie id.
+  hs.text(room, alice.id, 'ping Gail', { format: 'org.matrix.custom.html', formatted_body: `ping <a href="https://matrix.to/#/${gEv.sender}">Gail (${nat.node.org})</a>` });
+  await settle();
+  const ping = nat.got.filter((e) => e.type === 'message.create' && e.origin === gw.node.org).at(-1)!;
+  assert.equal(bodyOf(ping).mentions[0].id, `gail@${nat.node.org}`);
+
   // A Matrix thread reply maps back into the same Intertie thread.
   hs.text(room, alice.id, 'thanks', { 'm.relates_to': { rel_type: 'm.thread', event_id: a1, is_falling_back: true, 'm.in_reply_to': { event_id: gEv.event_id } } });
   await settle();
@@ -133,7 +139,7 @@ test('appservice mode: ghosts, threads, edits, redactions, reactions, files, loo
   assert.equal(nat.got.filter((e) => e.type === 'message.create').length, before);
   assert.ok(hs.timeline(room).some((e) => e.content.body?.includes('only vouches for users on hs.test')));
   const creates = nat.got.filter((e) => e.type === 'message.create' && e.origin === gw.node.org).length;
-  assert.equal(creates, 3, 'exactly the three Matrix-side messages (hello, thanks, file) crossed over');
+  assert.equal(creates, 4, 'exactly the four Matrix-side messages (hello, ping, thanks, file) crossed over');
 
   // Encrypted rooms are refused.
   const enc = hs.createRoom(alice.id, 'secret', { encrypted: true });

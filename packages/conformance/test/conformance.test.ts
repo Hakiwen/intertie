@@ -41,7 +41,7 @@ test('reference peer passes the peer suite', async () => {
 test('a broken home fails the right tests', async () => {
   const subject = await ident('lax');
   // Break replay protection: forget every nonce.
-  (subject.node as unknown as { nonces: { check: () => boolean } }).nonces = { check: () => true };
+  (subject.node as unknown as { nonces: object }).nonces = { has: () => false, remember: () => undefined };
   const ch = subject.node.createChannel({ name: 'lax' });
   const { results } = await runHomeSuite({ invite: subject.node.createInvite(ch.id), r1: await ident('r1'), devInsecure: true });
   assert.deepEqual(results.filter((r) => !r.pass).map((r) => r.id), ['core.sig.replay']);

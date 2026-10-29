@@ -156,7 +156,15 @@ export class IntertieNode {
     if (r.status !== 200) throw errorFrom(r);
     const c = (r.json as { channel: { id: string; name: string; topic?: string; home: string; seq: number; peers: { org: string; display_name?: string }[] } }).channel;
     if (c.home !== inv.home || !c.id.endsWith(`@${inv.home}`)) throw new IntertieError('invalid_invite', 'home returned a channel it does not own');
-    if (!this.store.channel(c.id)) {
+    const prior = this.store.channel(c.id);
+    if (prior) {
+      // Rejoining after a leave or removal: start fresh from the home's current position.
+      this.store.tx(() => {
+        this.store.updateChannel(c.id, { state: 'open', seq: c.seq, name: c.name, topic: c.topic ?? '' });
+        this.store.db.prepare('update channels set delivery = ? where id = ?').run(delivery, c.id);
+      });
+      this.buffers.delete(c.id);
+    } else {
       this.store.tx(() => {
         this.store.insertChannel({ id: c.id, home: c.home, role: 'peer', name: c.name, topic: c.topic ?? '', seq: c.seq, delivery, state: 'open', created: this.iso() });
         this.store.upsertParticipant({ channel: c.id, org: c.home, display_name: doc.display_name ?? c.home, delivery: 'push', state: 'active', cursor: 0, join_seq: 0 });
@@ -326,6 +334,7 @@ export class IntertieNode {
       const sequenced = { ...ev, seq };
       this.store.insertEvent(sequenced);
       this.store.updateChannel(ch.id, { seq });
+      if (ev.type === 'message.delete') this.store.purgeMessage(ch.id, b.target as string);
       if (ev.type === 'peer.leave') this.store.updateParticipant(ch.id, b.org as string, { state: 'left', leave_seq: seq });
       if (ev.type === 'channel.close') this.store.updateChannel(ch.id, { state: 'closed' });
       if (ev.type === 'channel.update') this.store.updateChannel(ch.id, { ...(b.name ? { name: b.name as string } : {}), ...(b.topic !== undefined ? { topic: b.topic as string } : {}) });
@@ -463,7 +472,13 @@ export class IntertieNode {
     for (const ev of [...events].sort((a, b) => a.seq! - b.seq!)) {
       const ch = this.store.channel(channel)!;
       if (ev.seq! <= ch.seq) { results.set(ev, { id: ev.id, status: 'duplicate', seq: ev.seq }); continue; }
-      if (ev.seq! > ch.seq + 1) { buf.set(ev.seq!, ev); gap = true; results.set(ev, { id: ev.id, status: 'accepted', seq: ev.seq }); continue; }
+      if (ev.seq! > ch.seq + 1) {
+        // Bounded: beyond this, drop the buffer and let pull re-fetch in order.
+        if (buf.size >= 1000) buf.clear();
+        buf.set(ev.seq!, ev);
+        gap = true;
+        results.set(ev, { id: ev.id, status: 'accepted', seq: ev.seq }); continue;
+      }
       this.applyOne(ev);
       results.set(ev, { id: ev.id, status: 'accepted', seq: ev.seq });
       for (let next = this.store.channel(channel)!.seq + 1; buf.has(next); next++) {
@@ -481,6 +496,9 @@ export class IntertieNode {
       this.store.updateChannel(ev.channel, { seq: ev.seq! });
       if (ev.origin === this.org) this.store.outboxRemove(ev.channel, ev.id);
       switch (ev.type) {
+        case 'message.delete':
+          if (typeof b.target === 'string') this.store.purgeMessage(ev.channel, b.target);
+          break;
         case 'peer.join':
           this.store.upsertParticipant({ channel: ev.channel, org: b.org as string, display_name: (b.display_name as string) ?? (b.org as string), delivery: 'push', state: 'active', cursor: 0, join_seq: ev.seq! });
           break;
@@ -556,6 +574,7 @@ export class IntertieNode {
       const auth = await verifyRequest({
         method: req.method ?? 'GET', url: this.endpointOrigin + (req.url ?? '/'), headers: req.headers, body,
         resolveKey: (org, kid, refresh) => this.discovery.key(org, kid, refresh), nonces: this.nonces,
+        isValidOrg: (org) => isOrgName(org, this.o.devInsecure),
         nowS: Math.floor(this.now() / 1000),
       }).catch((e) => { this.audit('auth.reject', { code: e.code, route }); throw e; });
       this.rateLimit(auth.org);
@@ -626,17 +645,22 @@ export class IntertieNode {
       },
     });
     if (existing?.state === 'active') return describe(existing.join_seq - 1);
-    if (inv.used_by && inv.used_by !== authOrg) throw new IntertieError('invalid_invite');
+    // Single use, for everyone: a removed or departed org needs a new invite.
+    if (inv.used_by) throw new IntertieError('invalid_invite');
     if (inv.bound_org && inv.bound_org !== authOrg) throw new IntertieError('invalid_invite');
     if (authOrg === this.org) throw new IntertieError('invalid_invite');
     const doc = await this.discovery.get(authOrg);
     const mode: Delivery = delivery === 'pull' || delivery === 'push' ? delivery : (doc.delivery ?? 'push');
-    const seqBefore = this.store.channel(ch.id)!.seq;
-    this.store.tx(() => {
-      this.store.useInvite(inv.token_hash, authOrg);
-      this.store.upsertParticipant({ channel: ch.id, org: authOrg, display_name: (doc.display_name ?? authOrg).slice(0, 80), delivery: mode, state: 'active', cursor: seqBefore, join_seq: seqBefore + 1 });
+    const displayName = (typeof doc.display_name === 'string' && doc.display_name ? doc.display_name : authOrg).slice(0, 80);
+    const seqBefore = this.store.tx(() => {
+      // Claim the token atomically: two orgs racing on one invite cannot both join.
+      const claimed = this.store.db.prepare('update invites set used_by = ? where token_hash = ? and used_by is null').run(authOrg, inv.token_hash);
+      if (Number(claimed.changes) !== 1) throw new IntertieError('invalid_invite');
+      const seq = this.store.channel(ch.id)!.seq;
+      this.store.upsertParticipant({ channel: ch.id, org: authOrg, display_name: displayName, delivery: mode, state: 'active', cursor: seq, join_seq: seq + 1 });
+      return seq;
     });
-    this.sequenceAtHome(this.draft(ch.id, 'peer.join', { org: authOrg, display_name: (doc.display_name ?? authOrg).slice(0, 80) }), this.org);
+    this.sequenceAtHome(this.draft(ch.id, 'peer.join', { org: authOrg, display_name: displayName }), this.org);
     return describe(seqBefore);
   }
 
@@ -646,7 +670,8 @@ export class IntertieNode {
     const p = this.store.participant(channel, authOrg);
     if (!p) throw new IntertieError('not_participant');
     const upTo = p.state === 'active' ? Number.MAX_SAFE_INTEGER : (p.leave_seq ?? 0);
-    const since = Math.max(0, Number(q.get('since') ?? 0) || 0);
+    // No history from before the join (spec/core.md §6), whatever `since` asks for.
+    const since = Math.max(0, Number(q.get('since') ?? 0) || 0, p.join_seq - 1);
     const limit = Math.min(LIMITS.batch, Math.max(1, Number(q.get('limit') ?? LIMITS.batch) || LIMITS.batch));
     const wait = Math.min(30, Math.max(0, Number(q.get('wait') ?? 0) || 0));
     let events = this.store.eventsSince(channel, since, limit, upTo);

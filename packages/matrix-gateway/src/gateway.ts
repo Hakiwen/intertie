@@ -242,10 +242,10 @@ export class MatrixGateway {
     }
     if (ev.type === 'm.reaction' && rel.rel_type === 'm.annotation') {
       const target = this.eventFor(channel, rel.event_id);
-      if (!target || typeof rel.key !== 'string') return;
+      if (!target || typeof rel.key !== 'string' || Buffer.byteLength(rel.key) > 64) return;
       const sender = await this.sender(ev.sender);
       this.node.store.db.prepare('insert or replace into mx_reactions values (?,?,?,?,?)').run(channel, target, rel.key, sender.id, ev.event_id);
-      return this.node.send(channel, { id, type: 'reaction.add', sender, body: { target, emoji: rel.key.slice(0, 32) } });
+      return this.node.send(channel, { id, type: 'reaction.add', sender, body: { target, emoji: rel.key } });
     }
     if (ev.type === 'm.room.redaction') {
       const redacted: string | undefined = ev.redacts ?? c.redacts;
@@ -283,6 +283,9 @@ export class MatrixGateway {
 
   /** Intertie user id for a Matrix user: readable, unique, within [A-Za-z0-9._-]. */
   userId(mxid: string): string {
+    // A ghost stands for a remote user: map it back to that user's own Intertie id.
+    const ghost = this.node.store.db.prepare('select user_id from mx_ghosts where mxid = ?').get(mxid) as { user_id: string } | undefined;
+    if (ghost) return ghost.user_id;
     const id = this.userIdOf(mxid);
     if (!this.isOurs(mxid)) this.node.store.kvSet(`mx-user:${id}`, mxid); // reverse map, for pills
     return id;
