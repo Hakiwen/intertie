@@ -28,7 +28,7 @@ P=$(free); serve "$P"
 CID=$(admin "$P" create-channel conformance | json ".channel.id")
 INV=$(admin "$P" invite "$CID" | json ".invite")
 node packages/conformance/src/cli.ts home --invite "$INV" --dev-insecure --port "$(free)" --implementation "intertie-py" --out "$OUT/py-home.json" 2> "$OUT/py-home.txt" || status=1
-tail -1 "$OUT/py-home.txt"
+tail -1 "$OUT/py-home.txt"; grep "✖" "$OUT/py-home.txt" || true
 
 # Peer roles: the runner prints an invite; the implementation accepts it.
 for mode in push pull; do
@@ -43,6 +43,6 @@ for mode in push pull; do
   echo "peer-$mode: invite $INV" >&2
   admin "$P" accept "$INV" >/dev/null || { echo "accept failed; runner said:" >&2; cat "$RUNNER_OUT" >&2; exit 1; }
   wait "$RP" || status=1
-  echo "peer-$mode: $(tail -1 "$RUNNER_OUT")"
+  echo "peer-$mode: $(tail -1 "$RUNNER_OUT")"; grep "✖" "$RUNNER_OUT" || true
 done
 exit $status
