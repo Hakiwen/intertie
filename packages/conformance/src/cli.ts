@@ -62,7 +62,9 @@ function emit(r: Report): void {
   if (values.out) writeFileSync(values.out, s); else process.stdout.write(s);
   for (const x of r.results) process.stderr.write(`${x.skipped ? '·' : x.pass ? '✔' : '✖'} ${x.id.padEnd(32)} ${x.detail}\n`);
   const failed = r.results.filter((x) => !x.pass).length;
-  process.stderr.write(`\n${r.passed ? 'PASS' : 'FAIL'}: ${r.results.length - failed}/${r.results.length} (levels passed: ${r.claim.levels.join(', ') || 'none'})\n`);
+  const skipped = r.results.filter((x) => x.skipped).length;
+  const ran = r.results.length - skipped;
+  process.stderr.write(`\n${r.passed ? 'PASS' : 'FAIL'}: ${ran - failed}/${ran} passed, ${skipped} skipped (levels passed: ${r.claim.levels.join(', ') || 'none'}; roles: ${r.claim.roles.join(', ')})\n`);
   if (!r.passed) process.exitCode = 1;
 }
 
@@ -85,7 +87,7 @@ async function main(): Promise<void> {
     const a = await identity(0);
     const b = dev ? await identity(1) : null;
     try {
-      const { results, subjectOrg } = await runPeerSuite({
+      const { results, subjectOrg, pull } = await runPeerSuite({
         home: a.id, r2: b?.id, devInsecure: dev,
         onInvite: async (invite) => {
           process.stderr.write(`\nPaste this invite into the implementation under test, so it accepts:\n\n  ${invite}\n\nWaiting up to 5 minutes…\n`);
@@ -96,7 +98,7 @@ async function main(): Promise<void> {
         },
       });
       const doc = subjectOrg ? await a.id.node.discovery.get(subjectOrg) : null;
-      emit(finish(results, { org: subjectOrg ?? '?', endpoint: doc?.endpoint ?? '' }, ['peer-push']));
+      emit(finish(results, { org: subjectOrg ?? '?', endpoint: doc?.endpoint ?? '' }, [pull ? 'peer-pull' : 'peer-push']));
     } finally { await a.close(); await b?.close(); }
     return;
   }

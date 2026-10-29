@@ -3,77 +3,479 @@
   "$id": "https://intertie.dev/schemas/0.1/event.schema.json",
   "title": "Intertie event",
   "type": "object",
-  "required": ["id", "type", "channel", "origin", "ts", "body"],
+  "required": [
+    "id",
+    "type",
+    "channel",
+    "origin",
+    "ts",
+    "body"
+  ],
   "properties": {
-    "id": { "$ref": "#/$defs/eventId" },
-    "type": { "type": "string", "minLength": 1, "maxLength": 128 },
-    "channel": { "$ref": "#/$defs/scopedId" },
-    "origin": { "type": "string", "minLength": 1, "maxLength": 253 },
-    "sender": { "$ref": "#/$defs/user" },
-    "ts": { "type": "string", "format": "date-time" },
-    "seq": { "type": "integer", "minimum": 1 },
-    "body": { "type": "object" }
+    "id": {
+      "$ref": "#/$defs/eventId"
+    },
+    "type": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "channel": {
+      "$ref": "#/$defs/scopedId"
+    },
+    "origin": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253
+    },
+    "sender": {
+      "$ref": "#/$defs/user"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "body": {
+      "type": "object"
+    }
   },
   "allOf": [
-    { "if": { "properties": { "type": { "const": "message.create" } } },
-      "then": { "required": ["sender"], "properties": { "body": { "$ref": "#/$defs/messageCreate" } } } },
-    { "if": { "properties": { "type": { "const": "message.edit" } } },
-      "then": { "required": ["sender"], "properties": { "body": { "type": "object", "required": ["target", "text"], "properties": { "target": { "$ref": "#/$defs/eventId" }, "text": { "$ref": "#/$defs/text" }, "mentions": { "$ref": "#/$defs/mentions" } } } } } },
-    { "if": { "properties": { "type": { "const": "message.delete" } } },
-      "then": { "properties": { "body": { "type": "object", "required": ["target"], "properties": { "target": { "$ref": "#/$defs/eventId" } } } } } },
-    { "if": { "properties": { "type": { "enum": ["reaction.add", "reaction.remove"] } } },
-      "then": { "required": ["sender"], "properties": { "body": { "type": "object", "required": ["target", "emoji"], "properties": { "target": { "$ref": "#/$defs/eventId" }, "emoji": { "type": "string", "minLength": 1, "maxLength": 64 }, "name": { "type": "string", "maxLength": 100 } } } } } },
-    { "if": { "properties": { "type": { "const": "peer.join" } } },
-      "then": { "properties": { "body": { "type": "object", "required": ["org"], "properties": { "org": { "type": "string" }, "display_name": { "type": "string", "maxLength": 80 } } } } } },
-    { "if": { "properties": { "type": { "const": "peer.leave" } } },
-      "then": { "properties": { "body": { "type": "object", "required": ["org", "reason"], "properties": { "org": { "type": "string" }, "reason": { "enum": ["left", "removed", "unreachable", "closed"] } } } } } },
-    { "if": { "properties": { "type": { "const": "channel.update" } } },
-      "then": { "properties": { "body": { "type": "object", "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 80 }, "topic": { "type": "string", "maxLength": 250 } } } } } },
-    { "if": { "properties": { "type": { "const": "channel.close" } } },
-      "then": { "properties": { "body": { "type": "object", "properties": { "reason": { "type": "string", "maxLength": 250 } } } } } },
-    { "if": { "properties": { "type": { "enum": ["member.join", "member.leave"] } } },
-      "then": { "properties": { "body": { "type": "object", "required": ["user"], "properties": { "user": { "type": "object", "required": ["id"], "properties": { "id": { "$ref": "#/$defs/scopedId" } } } } } } } }
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "message.create"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "sender"
+        ],
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/messageCreate"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "message.edit"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "sender"
+        ],
+        "properties": {
+          "body": {
+            "type": "object",
+            "required": [
+              "target",
+              "text"
+            ],
+            "properties": {
+              "target": {
+                "$ref": "#/$defs/eventId"
+              },
+              "text": {
+                "$ref": "#/$defs/text"
+              },
+              "mentions": {
+                "$ref": "#/$defs/mentions"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "message.delete"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "type": "object",
+            "required": [
+              "target"
+            ],
+            "properties": {
+              "target": {
+                "$ref": "#/$defs/eventId"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "enum": [
+              "reaction.add",
+              "reaction.remove"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "sender"
+        ],
+        "properties": {
+          "body": {
+            "type": "object",
+            "required": [
+              "target",
+              "emoji"
+            ],
+            "properties": {
+              "target": {
+                "$ref": "#/$defs/eventId"
+              },
+              "emoji": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 100
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "peer.join"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "type": "object",
+            "required": [
+              "org"
+            ],
+            "properties": {
+              "org": {
+                "type": "string"
+              },
+              "display_name": {
+                "type": "string",
+                "maxLength": 80
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "peer.leave"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "type": "object",
+            "required": [
+              "org",
+              "reason"
+            ],
+            "properties": {
+              "org": {
+                "type": "string"
+              },
+              "reason": {
+                "enum": [
+                  "left",
+                  "removed",
+                  "unreachable",
+                  "closed"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "channel.update"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "topic": {
+                "type": "string",
+                "maxLength": 250
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "channel.close"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "type": "string",
+                "maxLength": 250
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "enum": [
+              "member.join",
+              "member.leave"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "type": "object",
+            "required": [
+              "user"
+            ],
+            "properties": {
+              "user": {
+                "type": "object",
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "$ref": "#/$defs/scopedId"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   ],
   "$defs": {
-    "eventId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{16,64}$" },
-    "scopedId": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}@[^@\\s]{1,253}$" },
-    "text": { "type": "string", "minLength": 1, "maxLength": 16000 },
+    "eventId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{16,64}$"
+    },
+    "scopedId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{1,128}@[^@\\s]{1,253}$"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16000
+    },
     "user": {
       "type": "object",
-      "required": ["id", "name"],
+      "required": [
+        "id",
+        "name"
+      ],
       "properties": {
-        "id": { "$ref": "#/$defs/scopedId" },
-        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
-        "avatar": { "type": "string", "maxLength": 2048, "pattern": "^https://" }
+        "id": {
+          "$ref": "#/$defs/scopedId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "avatar": {
+          "type": "string",
+          "maxLength": 2048,
+          "pattern": "^https://"
+        }
       }
     },
     "mentions": {
-      "type": "array", "maxItems": 50,
-      "items": { "type": "object", "required": ["id", "name"], "properties": { "id": { "$ref": "#/$defs/scopedId" }, "name": { "type": "string", "maxLength": 80 } } }
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/scopedId"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
+      }
     },
     "file": {
       "type": "object",
-      "required": ["id", "name", "mime", "size", "sha256"],
+      "required": [
+        "id",
+        "name",
+        "mime",
+        "size",
+        "sha256"
+      ],
       "properties": {
-        "id": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$" },
-        "name": { "type": "string", "minLength": 1, "maxLength": 255 },
-        "mime": { "type": "string", "maxLength": 255 },
-        "size": { "type": "integer", "minimum": 0 },
-        "sha256": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" },
-        "url": { "type": "string", "maxLength": 2048 },
-        "data": { "type": "string", "maxLength": 349528 }
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]{1,128}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "mime": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        },
+        "url": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "data": {
+          "type": "string",
+          "maxLength": 349528
+        }
       },
-      "oneOf": [ { "required": ["url"] }, { "required": ["data"] } ]
+      "oneOf": [
+        {
+          "required": [
+            "url"
+          ]
+        },
+        {
+          "required": [
+            "data"
+          ]
+        }
+      ]
     },
     "messageCreate": {
       "type": "object",
-      "required": ["text"],
+      "required": [
+        "text"
+      ],
       "properties": {
-        "text": { "type": "string", "maxLength": 16000 },
-        "thread": { "$ref": "#/$defs/eventId" },
-        "mentions": { "$ref": "#/$defs/mentions" },
-        "files": { "type": "array", "minItems": 1, "maxItems": 10, "items": { "$ref": "#/$defs/file" } }
-      }
+        "text": {
+          "type": "string",
+          "maxLength": 16000
+        },
+        "thread": {
+          "$ref": "#/$defs/eventId"
+        },
+        "mentions": {
+          "$ref": "#/$defs/mentions"
+        },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "items": {
+            "$ref": "#/$defs/file"
+          }
+        },
+        "deleted": {
+          "const": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "not": {
+              "required": [
+                "files"
+              ]
+            }
+          },
+          "then": {
+            "anyOf": [
+              {
+                "properties": {
+                  "text": {
+                    "minLength": 1
+                  }
+                }
+              },
+              {
+                "required": [
+                  "deleted"
+                ],
+                "properties": {
+                  "deleted": {
+                    "const": true
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
     }
   }
 }

@@ -21,3 +21,27 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: npm ci
       - run: make check
+
+  python:
+    # The independent Python implementation (written from spec/ alone) must keep passing the
+    # conformance suite in every role, including the security level.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+      - run: npm ci
+      - name: Python venv (hash-pinned)
+        working-directory: implementations/python
+        run: python -m venv .venv && .venv/bin/pip install --require-hashes -r requirements.txt
+      - name: Python unit tests
+        working-directory: implementations/python
+        run: .venv/bin/python -m unittest discover -s tests -v
+      - name: Conformance suite against the Python implementation
+        run: scripts/conformance-python.sh

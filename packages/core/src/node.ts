@@ -375,10 +375,11 @@ export class IntertieNode {
       if (!ch || !p || p.delivery !== 'push' || p.state === 'dead') return;
       const upTo = p.state === 'left' ? (p.leave_seq ?? 0) : ch.seq;
       if (p.cursor >= upTo) return;
-      const batch = this.store.eventsSince(channel, p.cursor, LIMITS.batch, upTo);
+      let batch = this.store.eventsSince(channel, p.cursor, LIMITS.batch, upTo);
       if (!batch.length) { this.store.updateParticipant(channel, org, { cursor: upTo }); return; }
       try {
         const doc = await this.discovery.get(org);
+        batch = fitBatch(batch, doc.limits?.max_body_bytes);
         const r = await this.call('POST', `${doc.endpoint}/events`, { events: batch });
         if (r.status !== 200) throw Object.assign(errorFrom(r), { retryAfter: Number(r.headers['retry-after']) || 0 });
         this.store.updateParticipant(channel, org, { cursor: batch[batch.length - 1].seq!, fail_since: null });
@@ -422,8 +423,9 @@ export class IntertieNode {
 
   private async pumpOutbox(channel: string, k: string): Promise<void> {
     while (!this.stopped) {
-      const batch = this.store.outbox(channel, LIMITS.batch);
+      let batch = this.store.outbox(channel, LIMITS.batch);
       if (!batch.length) return;
+      batch = fitBatch(batch, undefined);
       const ch = this.store.channel(channel);
       if (!ch || ch.state !== 'open') {
         for (const ev of batch) { this.store.outboxRemove(channel, ev.id); this.rejected(ev, { code: 'channel_closed', message: 'channel is not open' }); }
@@ -685,7 +687,9 @@ export class IntertieNode {
       });
       events = this.store.eventsSince(channel, since, limit, upTo);
     }
-    return { events, seq: this.store.channel(channel)!.seq };
+    // A former peer learns nothing about activity after it left.
+    const latest = this.store.channel(channel)!.seq;
+    return { events, seq: p.state === 'active' ? latest : Math.min(latest, p.leave_seq ?? 0) };
   }
 
   private handleFile(authOrg: string, id: string, res: ServerResponse): void {
@@ -750,6 +754,18 @@ export class IntertieNode {
   private iso(): string { return new Date(this.now()).toISOString().replace(/\.\d{3}Z$/, 'Z'); }
   private log(level: LogLevel, msg: string, data?: Record<string, unknown>): void { this.o.log?.(level, msg, data); }
   private audit(action: string, data: Record<string, unknown>): void { this.log('audit', action, data); }
+}
+
+/** Trim a batch (by count already ≤ 100) so its JSON body fits the receiver's limit (spec/core.md §9). */
+export function fitBatch(events: IntertieEvent[], maxBodyBytes: number | undefined): IntertieEvent[] {
+  const max = Math.min(maxBodyBytes ?? LIMITS.bodyBytes, LIMITS.bodyBytes) - 1024;
+  let n = events.length;
+  let size = Buffer.byteLength(JSON.stringify({ events }));
+  while (n > 1 && size > max) {
+    n--;
+    size -= Buffer.byteLength(JSON.stringify(events[n])) + 1;
+  }
+  return events.slice(0, n);
 }
 
 function sha(s: string): string { return createHash('sha256').update(s).digest('base64url'); }

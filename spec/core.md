@@ -98,7 +98,10 @@ Fetching rules (see also `security.md` §SSRF):
 - Cache the document according to `Cache-Control: max-age`, clamped to the range
   [60 s, 24 h]. If there is no header, cache for 1 h.
 - If a signature names an unknown `kid`, re-fetch the document, but at most once per
-  60 s per org.
+  60 s per org. The 60 s window counts from the last such unknown-`kid` re-fetch, not
+  from ordinary cache fills.
+- In dev mode (§10), `host:port` and `*.localhost:port` orgs are fetched over `http`.
+  This is allowed on loopback only.
 
 ---
 
@@ -149,18 +152,32 @@ Signature: sig1=:<base64 Ed25519 signature over the signature base>:
 **Verification.** The receiver MUST perform all of these checks, in order. Any failure
 means 401 with the error code in brackets.
 
-1. `Signature-Input` has a `sig1` member whose component list is exactly the required
-   one, `alg="ed25519"` and `tag="intertie"`. [`bad_signature`]
+1. The **whole** `Signature-Input` value is exactly one `sig1` member in the profile's
+   form, and nothing else:
+   - the exact component list;
+   - the parameters `created;keyid;alg;nonce;tag`, in that order;
+   - `alg="ed25519"` and `tag="intertie"`;
+   - a nonce of at least 16 bytes (22 base64url characters).
+
+   `Signature` is exactly one `sig1` member. Extra members, labels, parameters or
+   components are refused, and so is a `keyid` that is not
+   `<valid org name>#<kid>`. [`bad_signature`]
 2. `|now − created| ≤ 300 s`. [`stale_signature`]
-3. The `nonce` has not been seen for this `keyid` in the last 600 s. Remember it.
-   [`replayed`]
+3. The `nonce` has not been seen for this `keyid` in the last 600 s. [`replayed`]
 4. Split `keyid` at its last `#` into `org` and `kid`. Resolve `org` (§3) and find
-   `kid`, re-fetching once if it's missing. [`unknown_key`]
-5. If the request has a body, `Content-Digest` matches the bytes received.
+   `kid`, re-fetching once if it's missing. Any failure to resolve is `unknown_key`:
+   network error, redirect, oversize document, wrong `org` field, incompatible version,
+   or missing `kid`. [`unknown_key`]
+5. If the request has a body, `Content-Digest` matches the bytes received. A request
+   "has a body" when it carries one or more bytes; `Content-Length: 0` is no body.
    [`bad_digest`]
 6. Rebuild the base and verify it. For `@target-uri`, use the receiver's own external
-   view of the URI: its configured endpoint base plus the received path and query.
+   view of the URI: the **scheme and authority** of its configured endpoint, followed by
+   the raw request-target (the path and query exactly as received).
    [`bad_signature`]
+
+Step 3 checks the nonce. Remember it only after step 6 succeeds, so forged requests cost
+no memory.
 
 After these checks pass, the request is from **`org`**. This is the authenticated org,
 and the rest of Core relies only on it. Responses are not signed: TLS authenticates
@@ -247,7 +264,8 @@ Native thread rendering is the `threads` capability.
 - A purged `message.create` keeps its place in the log as
   `body: { "text": "", "deleted": true }`, keeping `thread` if it had one. A home that
   has purged content serves that shell when peers pull. Receivers treat it as deleted.
-- An edit or delete whose target is unknown is accepted and ignored.
+- A **receiver of sequenced events** accepts and ignores an edit or delete whose target
+  it doesn't know. The **home** rejects such a submission (§7.1, check 4).
 
 **Unknown types and fields.** Receivers MUST ignore event types and body fields they
 don't understand, and MUST still accept the event.
@@ -295,7 +313,13 @@ After that, the home sequences a `peer.join` event, here as seq 42.
 - A repeat accept from an org that is already an *active* peer returns the same
   channel and never `404`. A token is single-use in every other case, so an org that
   left or was removed needs a new invite.
-- An invalid token returns `404 invalid_invite`.
+  The `seq` returned is the original pre-join one (`join seq − 1`), so a peer that lost
+  the first response still pulls from its join.
+- Every other accept failure returns `404 invalid_invite`, deliberately with no detail:
+  - an unknown, expired or used token;
+  - a binding mismatch;
+  - the home accepting its own invite;
+  - a closed channel.
 
 The peer's `delivery` value (§7) overrides the one in its discovery document for this
 channel.
@@ -304,10 +328,12 @@ channel.
 The home sequences it, delivers it to all participants, the leaver included, and then
 stops delivering to the leaver.
 
-**Remove.** The home emits `peer.leave` with `reason: "removed"`.
+**Remove.** The home emits `peer.leave` with `reason: "removed"`. As with a leave, the
+removed peer receives that event, and then delivery to it stops.
 
 **Close (unshare).** The home emits `channel.close`, then rejects further submissions
-with `409 channel_closed`. It keeps the log available for pull for 7 days.
+per event (`results[].error`) with `channel_closed`. This check comes right after the
+origin check (§7.1, check 3). It keeps the log available for pull for 7 days.
 
 **Key revocation.** See §4. Revoking an org's last key effectively disconnects it from
 every channel.
@@ -328,15 +354,20 @@ with 1–100 events. The response is `200` with one result per event, in order:
 
 A status other than `200` means the receiver processed **none** of the events.
 
-**At the home**, when an event has no `seq`, it is a submission. The home MUST verify,
-in this order:
+**At the home**, when an event has no `seq`, it is a submission. An event that carries a
+`seq` and is sent to the home of its channel is rejected [`invalid_event`]. The home MUST
+verify, in this order:
 
+0. The event is structurally valid (§5, the schemas). [`invalid_event`]
 1. The channel is one this org homes. [`unknown_channel`]
 2. The authenticated org is a current peer of the channel. [`not_participant`]
 3. `origin` equals the authenticated org, and `sender.id` belongs to `origin`.
    [`bad_origin`]
+   If the channel is closed, the event is rejected. [`channel_closed`]
 4. The type is one a peer may create (§5). Edits and deletes target a known message
-   with the same origin; edits also need the same sender. [`not_author`]
+   with the same origin; edits also need the same sender. [`not_author`] An unknown
+   target, and a thread root that isn't a top-level message, are rejected.
+   [`invalid_event`] Unknown and extension types pass this check and are sequenced.
 5. Duplicates are handled:
    - If the `id` was already sequenced *from the same origin*, the result is
      `duplicate` with the existing `seq`.
@@ -347,16 +378,21 @@ If all checks pass, the home assigns `seq = last + 1`, stores the event, returns
 `accepted` with the new `seq`, and queues delivery to **every** peer, the origin
 included. The origin uses that copy to learn its own event's position.
 
-**At a peer**, events arrive with a `seq`. The peer MUST check that the authenticated
-org is the channel's home [`not_home`].
+**At a peer**, events arrive with a `seq`. The peer MUST check two things:
+
+- the authenticated org is the channel's home [`not_home`];
+- the event carries a `seq` [`invalid_event`].
+
+Then the peer applies events in `seq` order and treats an already-applied `seq` as a
+`duplicate`.
+
+- If it sees a gap (a `seq` greater than its last plus 1), it accepts the event (status
+  `accepted`, with its `seq`), holds it, and fills the gap by pull (§7.3) before
+  applying.
 
 Right after a successful accept, a peer SHOULD pull once (§7.3) from `channel.seq`. A
-push can arrive before the accept response is processed, and the peer answers that
-push `unknown_channel`. Then it applies the events in `seq` order and
-treats an already-applied `seq` as a `duplicate`.
-
-- If it sees a gap (a `seq` greater than its last plus 1), it accepts the event, holds
-  it, and fills the gap by pull (§7.3) before applying.
+push can arrive before the accept response is processed, and the peer answers that push
+`unknown_channel`.
 - The home may relay events from any origin. The peer trusts the home for ordering and
   relay (`security.md` §Trust).
 
@@ -382,19 +418,22 @@ Delivery is **at-least-once**. The event `id` and `seq` make it idempotent.
 
 ### 7.3 GET {endpoint}/channels/{channel}/events?since={seq}&limit={n}&wait={s}
 
-The pull fallback. Every home MUST serve it. `{channel}` is percent-encoded, so `@`
-becomes `%40`.
+The pull fallback. Every home MUST serve it. `{channel}` is one path segment,
+percent-encoded per RFC 3986, so `@` becomes `%40` and `:` becomes `%3A`. The home
+decodes it.
 
 Parameters:
 
-- `since`: the last `seq` the caller has. The response returns events with a greater
-  `seq`.
-- `limit`: 1–100, default 100.
-- `wait`: optional, 0–30. When there are no newer events, the home MAY hold the request
+- `since`: the last `seq` the caller has, default 0. The response returns events with
+  a greater `seq`. A value that is not a non-negative integer is
+  `400 bad_request`.
+- `limit`: 1–100, default 100. Out-of-range values SHOULD be clamped.
+- `wait`: optional, 0–30, clamped likewise. When there are no newer events, the home MAY hold the request
   open for up to `wait` seconds before answering with an empty list (long-poll).
 
-The response is `200` with `{ "events": [ … ascending … ], "seq": <latest seq in the
-channel> }`.
+The response is `200` with `{ "events": [ … ascending … ], "seq": <latest seq> }`.
+For a former peer, `seq` is capped at its own `peer.leave`, so the response does not
+reveal activity after it left. Its pulls don't wait.
 
 - The caller MUST be a current participant [`not_participant`], or a former peer
   fetching events up to its own `peer.leave`.
@@ -419,10 +458,11 @@ Non-`200` responses carry `{ "error": { "code": "<code>", "message": "<human tex
 
 | HTTP | codes |
 |---|---|
-| 400 | `bad_request`, `invalid_event` |
+| 400 | `bad_request` (including more than 100 events in a batch), `invalid_event` |
 | 401 | `bad_signature`, `stale_signature`, `replayed`, `unknown_key`, `bad_digest` |
 | 403 | `not_participant`, `not_home`, `bad_origin`, `not_author` |
-| 404 | `unknown_channel`, `invalid_invite` |
+| 404 | `unknown_channel`, `invalid_invite`, `not_found` (unknown path) |
+| 405 | `bad_request` (wrong method on a known path; a `404` is also acceptable) |
 | 409 | `channel_closed`, `id_conflict` |
 | 413 | `too_large` |
 | 429 | `rate_limited` (with `Retry-After`) |
@@ -438,9 +478,13 @@ Per-event rejections use the same codes inside `results[].error`.
 | request body | 1 MiB, or less if `limits.max_body_bytes` says so |
 | events per batch | 100 |
 | `text` | 16,000 characters |
+| a batch | at most the receiver's body limit: senders split batches by size as well as count |
 | `sender.name`, `display_name`, channel `name` | 80 characters |
 | channel `topic` | 250 characters |
 | discovery document | 64 KiB |
+
+"Characters" means Unicode code points, not UTF-16 units or bytes. An over-long value is
+`too_large`; an empty required value is `invalid_event`.
 
 ---
 
@@ -451,7 +495,8 @@ Per-event rejections use the same codes inside `results[].error`.
 - `intertie` is `major.minor`. Minor versions only add things.
 - Two implementations are compatible when their majors match.
 - During `0.x`, a minor bump MAY break compatibility, and the changelog will say when
-  it does.
+  it does. A `0.1` implementation accepts peers that advertise `0.y` for any `y ≥ 1`,
+  and ignores whatever it doesn't understand.
 
 **Unknown things are ignored.** Unknown fields, event types and capabilities MUST be
 ignored and MUST NOT cause errors.
@@ -463,7 +508,8 @@ registered capability names never contain `/`.
 **Dev mode** (`--dev-insecure` in the reference implementation) relaxes two rules, for
 local testing only:
 
-- org names MAY be `host:port`;
+- org names MAY be `localhost:port`, `<name>.localhost:port`, `127.0.0.1:port` or
+  `[::1]:port`;
 - discovery and endpoints MAY use `http` on loopback addresses.
 
 Dev mode MUST be off by default. An implementation in dev mode MUST refuse non-loopback

@@ -79,3 +79,31 @@ test('forged requests cost no nonce memory and junk keyid orgs cause no fetch', 
   assert.equal(r.status, 401);
   assert.match(r.body.toString(), /valid org name/);
 });
+
+test('independent-implementation feedback: batches fit the body limit; former peers learn nothing new; limit codes', async () => {
+  const { fitBatch, validateEvent } = await import('../src/index.ts');
+  const acme = await make('Acme'), globex = await make('Globex');
+  const ch = acme.createChannel({ name: 'big' });
+  await globex.accept(acme.createInvite(ch.id));
+  await settle(acme, globex);
+  // 100 maximum-size messages: one batch would be ~1.6 MB; the home must split by size.
+  const got: string[] = [];
+  globex.onEvent((e) => { if (e.type === 'message.create') got.push(e.id); });
+  for (let i = 0; i < 100; i++) await acme.send(ch.id, { type: 'message.create', sender: user(acme, 'a'), body: { text: 'x'.repeat(16_000) } });
+  await until(() => got.length === 100, 15_000, 'all 100 large messages delivered');
+  const big = acme.store.eventsSince(ch.id, 0, 100);
+  assert.ok(Buffer.byteLength(JSON.stringify({ events: fitBatch(big, undefined) })) <= 1024 * 1024);
+  // A removed peer's pull reports a seq capped at its own removal.
+  acme.removePeer(ch.id, globex.org);
+  await settle(acme, globex);
+  const leaveSeq = acme.store.participant(ch.id, globex.org)!.leave_seq!;
+  await acme.send(ch.id, { type: 'message.create', sender: user(acme, 'a'), body: { text: 'after' } });
+  const r = await (globex as unknown as { call: (m: string, u: string) => Promise<{ status: number; json: { seq: number } }> })
+    .call('GET', `${acme.endpoint}/channels/${encodeURIComponent(ch.id)}/events?since=${leaveSeq}`);
+  assert.equal(r.json.seq, leaveSeq);
+  // Limits: over-long name → too_large; too much inline data in one event → too_large.
+  const base = { id: '01JBDXQ4M6V2S9K3Y8T7R5N0PA', channel: 'c-1@acme.com', origin: 'globex.com', ts: '2026-10-29T19:03:00Z', type: 'message.create' };
+  assert.throws(() => validateEvent({ ...base, sender: { id: 'u@globex.com', name: 'n'.repeat(81) }, body: { text: 'x' } }), { code: 'too_large' });
+  const f = (i: number) => ({ id: `f${i}`, name: 'a', mime: 'x', size: 200 * 1024, sha256: 'A'.repeat(43), data: 'AA==' });
+  assert.throws(() => validateEvent({ ...base, sender: { id: 'u@globex.com', name: 'n' }, body: { text: '', files: [f(1), f(2), f(3)] } }), { code: 'too_large' });
+});

@@ -395,7 +395,7 @@ export interface PeerSuiteOptions {
 }
 
 /** Test the subject in a peer role: it accepts the runner's invite, then receives deliveries. */
-export async function runPeerSuite(o: PeerSuiteOptions): Promise<{ results: TestResult[]; subjectOrg: string | null }> {
+export async function runPeerSuite(o: PeerSuiteOptions): Promise<{ results: TestResult[]; subjectOrg: string | null; pull?: boolean }> {
   const s = new Suite('peer');
   const dev = o.devInsecure;
   const H = o.home;
@@ -478,6 +478,7 @@ export async function runPeerSuite(o: PeerSuiteOptions): Promise<{ results: Test
   } else {
     for (const id of ['security.peer.replay', 'security.peer.stale', 'security.peer.forged-home-key', 'security.peer.digest', 'security.peer.unknown-channel', 'security.peer.missing-seq']) s.skip(id, 'security', 'subject is pull-only');
   }
+  const result = { pull };
   await s.t('core.peer.removed', 'core', async () => {
     H.node.removePeer(ch.id, org);
     const seq = H.node.channel(ch.id)!.seq;
@@ -485,5 +486,5 @@ export async function runPeerSuite(o: PeerSuiteOptions): Promise<{ results: Test
     expect(await delivered(seq), 'removal notice not accepted');
     return 'removal delivered';
   });
-  return { results: s.results, subjectOrg: org };
+  return { results: s.results, subjectOrg: org, pull: result.pull };
 }

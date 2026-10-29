@@ -40,7 +40,7 @@ New event types:
 
 | type | body |
 |---|---|
-| `reaction.add` | `target` (a message id), `emoji` (one Unicode emoji, max 32 bytes), `name` (optional shortcode such as `"eyes"`, for custom emoji or as a fallback) |
+| `reaction.add` | `target` (a message id), `emoji` (one Unicode emoji, at most 64 UTF-8 bytes; ZWJ sequences can be long), `name` (optional shortcode such as `"eyes"`, for custom emoji or as a fallback) |
 | `reaction.remove` | the same fields as `reaction.add` |
 
 **Rules:**
@@ -51,6 +51,8 @@ New event types:
   Receivers show the text.
 - Only the reacting user's org may remove that user's reaction. The home enforces
   `origin` = the sender's org as it does for every event.
+- The home SHOULD reject a reaction whose `target` is not a known message
+  (`invalid_event`).
 
 ---
 
@@ -77,7 +79,9 @@ A file is delivered in one of two ways:
   - The origin MUST keep serving the file for at least as long as the home keeps the
     event available for pull (7 days).
   - Receivers SHOULD copy the file into their own storage when they receive it.
-- **Inline**, for files of 256 KiB or less: `data` (standard base64) replaces `url`.
+- **Inline**, for files of 256 KiB or less: `data` (standard base64) replaces `url`. The
+  total inline data in one event is at most 512 KiB, so every event fits a 1 MiB request.
+  Larger sets go by reference.
 
 **Rules for receivers:**
 

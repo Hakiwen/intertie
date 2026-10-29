@@ -44,6 +44,8 @@ export const LIMITS = {
   batch: 100,
   bodyBytes: 1024 * 1024,
   inlineFileBytes: 256 * 1024,
+  /** Total inline file bytes in one event, so any single event fits a 1 MiB request. */
+  inlineTotalBytes: 512 * 1024,
   files: 10,
   mentions: 50,
 };
@@ -88,6 +90,8 @@ function checkFiles(f: unknown): void {
     if ((x.url === undefined) === (x.data === undefined)) fail('file needs exactly one of url, data');
     if (x.data !== undefined && (!isStr(x.data) || x.size > LIMITS.inlineFileBytes)) fail('inline file too large', 'too_large');
   }
+  const inline = (f as FileRef[]).reduce((n, x) => n + (x.data !== undefined ? x.size : 0), 0);
+  if (inline > LIMITS.inlineTotalBytes) fail(`inline files over ${LIMITS.inlineTotalBytes} bytes in one event`, 'too_large');
 }
 
 /**
@@ -106,7 +110,8 @@ export function validateEvent(e: unknown): IntertieEvent {
   if (!ev.body || typeof ev.body !== 'object' || Array.isArray(ev.body)) fail('body must be an object');
   if (ev.sender !== undefined) {
     checkUser(ev.sender, ev.origin, 'sender');
-    if (!isStr(ev.sender.name) || ev.sender.name.length < 1 || chars(ev.sender.name) > LIMITS.name) fail('bad sender name');
+    if (!isStr(ev.sender.name) || ev.sender.name.length < 1) fail('bad sender name');
+    if (chars(ev.sender.name) > LIMITS.name) fail(`sender name over ${LIMITS.name} characters`, 'too_large');
     if (ev.sender.avatar !== undefined && (!isStr(ev.sender.avatar) || !ev.sender.avatar.startsWith('https://') || ev.sender.avatar.length > 2048)) {
       fail('avatar must be an https URL');
     }

@@ -35,3 +35,17 @@ Machine-readable:
 ## Changelog
 
 - 0.1 (2026-10-29): first draft.
+- 0.1 clarifications (2026-10-29), from the first independent implementation (Python,
+  written from this text alone; see `implementations/python/SPEC-FEEDBACK.md`). These
+  make the following precise:
+  - the signature profile's strictness;
+  - `@target-uri`;
+  - which error code applies to each case;
+  - check order;
+  - pull parameters and former-peer pulls;
+  - batch size;
+  - what "characters" means;
+  - the 0.x version rule;
+  - dev-mode names.
+
+  No wire-format change.

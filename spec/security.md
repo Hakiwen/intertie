@@ -61,7 +61,7 @@ MUST or SHOULD.
 | Invite theft | Tokens have ≥ 128 bits, are single-use and expire (≤ 7 days by default). They can be bound to an org. The home shows the admin which org accepted, and the admin can remove that org. |
 | SSRF via discovery or endpoints | See below. |
 | Malicious content | See below. |
-| Resource exhaustion | Size limits (Core §9), batch ≤ 100, per-org rate limits (`429` + `Retry-After`), long-poll `wait` ≤ 30 s, and dead-peer handling. |
+| Resource exhaustion | Size limits (Core §9), batch ≤ 100, per-org rate limits (`429` + `Retry-After`), long-poll `wait` ≤ 30 s, and dead-peer handling. Rate limits SHOULD apply per authenticated org, after signature verification. As a guide, the reference allows 50 requests/s with a burst of 200. Unauthenticated work is bounded by verifying before any per-request state is kept (Core §4). |
 
 ### SSRF
 
@@ -81,8 +81,8 @@ these rules:
   - loopback, private (RFC 1918), CGNAT (100.64/10) and link-local (169.254/16, which
     includes cloud metadata);
   - ULA (fc00::/7), unspecified, multicast and IPv4-mapped forms of all the above.
-  Connect to the address you checked, so a second lookup can't swap in a different one
-  (DNS rebinding). Dev mode (Core §10) is the only exception, and it only allows
+  If **any** resolved address is forbidden, refuse the name. Connect to the address you
+  checked, so a second lookup can't swap in a different one (DNS rebinding). Dev mode (Core §10) is the only exception, and it only allows
   loopback.
 - Use timeouts (10 s to connect, 30 s total, longer only for long-poll) and response
   size caps.
