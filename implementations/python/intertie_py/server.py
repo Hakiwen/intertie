@@ -81,7 +81,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200, n.handle_pull(auth, unquote(pull[1]), q))
             try:
                 obj = json.loads(body)
-            except ValueError:
+            except (ValueError, RecursionError):  # deeply nested JSON raises RecursionError on some Pythons
                 raise ProtoError(400, "bad_request", "body is not JSON")
             if not isinstance(obj, dict):
                 raise ProtoError(400, "bad_request", "body must be an object")

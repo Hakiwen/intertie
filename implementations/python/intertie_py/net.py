@@ -91,7 +91,7 @@ class Directory:
             raise FetchError(f"discovery {org}: HTTP {status}")
         try:
             doc = json.loads(data)
-        except ValueError:
+        except (ValueError, RecursionError):
             raise FetchError("discovery: not JSON")
         if not isinstance(doc, dict) or doc.get("org") != org:
             raise FetchError("discovery: org mismatch")
