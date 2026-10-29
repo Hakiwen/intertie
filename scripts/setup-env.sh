@@ -3,10 +3,39 @@
 #   scripts/setup-env.sh a|b           Slack workspace A or B: prompts for the two tokens (hidden input)
 #   scripts/setup-env.sh matrix        Matrix room: OAuth device login (approve in a browser), no token to copy
 #   scripts/setup-env.sh matrix-token  Matrix, for homeservers without OAuth login: prompts for an access token (hidden)
+#   scripts/setup-env.sh teams         Microsoft Teams: App ID, tenant ID, client secret (hidden), public URL; builds the app package
 set -eu
 side="${1:-}"
-case "$side" in a|b|matrix|matrix-token) ;; *) sed -n '2,6p' "$0" >&2; exit 2 ;; esac
+case "$side" in a|b|matrix|matrix-token|teams) ;; *) sed -n '2,7p' "$0" >&2; exit 2 ;; esac
 cd "$(dirname "$0")/.."
+
+if [ "$side" = teams ]; then
+  guid='^[0-9a-fA-F]\{8\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{4\}-[0-9a-fA-F]\{12\}$'
+  printf 'Azure Bot "Microsoft App ID" (a GUID): '; read -r appid
+  echo "$appid" | grep -q "$guid" || { echo "not a GUID; nothing written" >&2; exit 1; }
+  printf 'Azure Bot "App Tenant ID" (a GUID): '; read -r tenant
+  echo "$tenant" | grep -q "$guid" || { echo "not a GUID; nothing written" >&2; exit 1; }
+  printf 'Client secret VALUE (not the secret ID), then Enter: '
+  stty -echo 2>/dev/null || true; read -r secret; stty echo 2>/dev/null || true; echo
+  [ -n "$secret" ] || { echo "empty secret; nothing written" >&2; exit 1; }
+  printf 'Public https base URL that Teams will call (from the agent, e.g. https://hub.example.ts.net): '; read -r pub
+  case "$pub" in https://*) ;; *) echo "must start with https://; nothing written" >&2; exit 1 ;; esac
+  umask 077
+  cat > .env.teams <<ENV
+TEAMS_APP_ID=$appid
+TEAMS_TENANT_ID=$tenant
+TEAMS_APP_PASSWORD=$secret
+TEAMS_PUBLIC_URL=${pub%/}
+INTERTIE_PORT=8714
+TEAMS_PORT=8715
+INTERTIE_DISPLAY_NAME=Teams demo team
+INTERTIE_STATE_DIR=./state/t
+ENV
+  chmod 600 .env.teams
+  mkdir -p state/t; chmod 700 state/t
+  echo "wrote .env.teams (mode 600, gitignored). The secret was not printed."
+  exec node packages/teams-adapter/src/cli.ts package --env .env.teams
+fi
 
 if [ "$side" = matrix ] || [ "$side" = matrix-token ]; then
   printf 'Your OWN Matrix user id: the person who will talk in the demo room (e.g. @ben:matrix.org): '
