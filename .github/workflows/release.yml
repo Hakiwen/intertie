@@ -1,0 +1,87 @@
+# Tag vX.Y.Z → build the package tarballs, generate SBOMs, attest both with Sigstore (keyless,
+# GitHub OIDC), and publish a GitHub Release with tarballs, SBOMs, checksums and attestation bundles.
+# Verify: gh attestation verify <tarball> --owner Hakiwen   (see SECURITY.md)
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # create the release
+      id-token: write      # Sigstore keyless signing via GitHub OIDC
+      attestations: write  # store attestations
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Tag matches package version
+        run: |
+          v=$(node -p "require('./package.json').version")
+          test "v$v" = "$GITHUB_REF_NAME"
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+      - run: npm ci
+      - run: make check
+      - name: Build package tarballs (npm pack)
+        run: node scripts/build-packages.ts
+      - name: Smoke-test the tarballs as a consumer
+        run: scripts/smoke-release.sh
+      - name: Generate SBOMs (npm sbom, CycloneDX + SPDX)
+        run: scripts/sbom.sh
+      - name: OSV-Scanner over the SBOMs
+        uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+        with:
+          scan-args: |-
+            scan
+            source
+            -L
+            dist/sbom/intertie-workspace-${{ env.VERSION }}.cdx.json
+      - name: SLSA build provenance for the tarballs
+        id: provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/release/*.tgz
+      - name: SBOM attestation, core
+        id: sbom-core
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-path: dist/release/intertie-core-*.tgz
+          sbom-path: dist/sbom/intertie-core-${{ env.VERSION }}.cdx.json
+      - name: SBOM attestation, slack-adapter
+        id: sbom-slack
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-path: dist/release/intertie-slack-adapter-*.tgz
+          sbom-path: dist/sbom/intertie-slack-adapter-${{ env.VERSION }}.cdx.json
+      - name: SBOM attestation, matrix-gateway
+        id: sbom-matrix
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-path: dist/release/intertie-matrix-gateway-*.tgz
+          sbom-path: dist/sbom/intertie-matrix-gateway-${{ env.VERSION }}.cdx.json
+      - name: SBOM attestation, conformance
+        id: sbom-conformance
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-path: dist/release/intertie-conformance-*.tgz
+          sbom-path: dist/sbom/intertie-conformance-${{ env.VERSION }}.cdx.json
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir -p dist/attestations
+          cp "${{ steps.provenance.outputs.bundle-path }}" dist/attestations/provenance.intoto.jsonl
+          cp "${{ steps.sbom-core.outputs.bundle-path }}" dist/attestations/sbom-core.intoto.jsonl
+          cp "${{ steps.sbom-slack.outputs.bundle-path }}" dist/attestations/sbom-slack-adapter.intoto.jsonl
+          cp "${{ steps.sbom-matrix.outputs.bundle-path }}" dist/attestations/sbom-matrix-gateway.intoto.jsonl
+          cp "${{ steps.sbom-conformance.outputs.bundle-path }}" dist/attestations/sbom-conformance.intoto.jsonl
+          node scripts/release-notes.ts "$TAG" > dist/release-notes.md
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Intertie $TAG" --notes-file dist/release-notes.md \
+            dist/release/*.tgz dist/release/SHA256SUMS dist/sbom/*.json dist/attestations/*.jsonl

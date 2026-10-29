@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rewriteRelativeImportExtensions": true,
+    "declaration": true,
+    "sourceMap": false,
+    "rootDir": "packages",
+    "outDir": "build/tsc"
+  },
+  "include": ["packages/core/src/**/*.ts", "packages/slack-adapter/src/**/*.ts", "packages/matrix-gateway/src/**/*.ts", "packages/conformance/src/**/*.ts"]
+}

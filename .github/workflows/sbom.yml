@@ -1,0 +1,40 @@
+# SBOMs from the lockfile on every push to main (and on PRs), scanned with OSV-Scanner.
+# Releases attest them too: see release.yml.
+name: sbom
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 6 * * 1' # weekly: new advisories can appear for an unchanged lockfile
+permissions:
+  contents: read
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: echo "VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+      - name: Generate SBOMs (npm sbom, CycloneDX + SPDX)
+        run: scripts/sbom.sh
+      - name: OSV-Scanner over the SBOMs and the lockfile
+        uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+        with:
+          scan-args: |-
+            scan
+            source
+            -L
+            dist/sbom/intertie-workspace-${{ env.VERSION }}.cdx.json
+            -L
+            package-lock.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: dist/sbom/
+          if-no-files-found: error

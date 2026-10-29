@@ -1,5 +1,6 @@
 {
   "name": "intertie-monorepo",
+  "version": "0.1.0",
   "private": true,
   "description": "Intertie: an open protocol for shared channels between organizations, no intermediary.",
   "license": "Apache-2.0",
