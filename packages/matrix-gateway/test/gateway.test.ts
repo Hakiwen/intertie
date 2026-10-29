@@ -190,3 +190,49 @@ test('bot mode: one account on someone else’s homeserver, via /sync', async ()
   assert.equal(hs.timeline(room).filter((e) => e.type === 'm.reaction').length, 1, 'one bot reaction, reference-counted');
   assert.equal(nat.got.filter((e) => e.type === 'message.create' && e.origin === gw.node.org).length, 1, 'bot posts are not echoed');
 });
+
+test('bot mode with OAuth device login: approve once, tokens refresh on expiry, only allowed users relay', async () => {
+  const { deviceLogin, SessionFile } = await import('../src/index.ts');
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const hs = new FakeHomeserver();
+  await hs.start();
+  cleanup.push(() => hs.stop());
+  const ben = hs.addUser('ben', 'Ben');
+  const stranger = hs.addUser('stranger', 'Stranger');
+  hs.users.set(`@intertie-demo:${hs.serverName}`, { displayname: 'Intertie demo' });
+  const bot = `@intertie-demo:${hs.serverName}`;
+  const room = hs.createRoom(ben.id, 'intertie-demo');
+  hs.rooms.get(room)!.members.set(stranger.id, 'join');
+  let prompted = '';
+  const session = await deviceLogin(hs.base, ({ code }) => { prompted = code; setTimeout(() => hs.approveDevice(code, bot), 50); }, { pollMs: 20 });
+  assert.ok(prompted, 'the operator was shown a code');
+  const path = join(mkdtempSync(join(tmpdir(), 'mxs-')), 'matrix-session.json');
+  SessionFile.save(path, session);
+  const port = await freePort();
+  const org = `localhost:${port}`;
+  const gw = new MatrixGateway({
+    node: { org, endpoint: `http://${org}/intertie`, keys: [generateKey('k1')], devInsecure: true, retryBaseMs: 20, retryCapMs: 200, pullWaitS: 1 },
+    matrix: { homeserver: hs.base, mode: 'bot', accessToken: new SessionFile(path), allowedUsers: [ben.id], admins: [ben.id] },
+  });
+  await gw.start(port);
+  cleanup.push(() => gw.stop());
+  const nat = await nativeOrg('Acme');
+  const settle = async () => { for (let i = 0; i < 3; i++) { await until(() => gw.isIdle() && nat.node.isIdle(), 8000, 'idle'); await new Promise((r) => setTimeout(r, 150)); } };
+  await new Promise((r) => setTimeout(r, 200));
+  hs.invite(room, ben.id, bot);
+  await until(() => hs.rooms.get(room)!.members.get(bot) === 'join', 5000, 'bot joined');
+  const ch = nat.node.createChannel({ name: 'demo' });
+  const { channel } = await gw.accept(nat.node.createInvite(ch.id), 'intertie-demo'); // by room name
+  assert.equal(channel, ch.id);
+  hs.expireOAuthTokens(); // a few hours later…
+  hs.text(room, ben.id, 'still here after expiry');
+  hs.text(room, stranger.id, 'random person in the room');
+  await settle();
+  assert.ok(hs.refreshes >= 1, 'the session refreshed');
+  const texts = nat.got.filter((e) => e.type === 'message.create').map((e) => bodyOf(e).text);
+  assert.deepEqual(texts, ['still here after expiry']);
+  assert.ok(hs.timeline(room).some((e) => e.content.body?.includes('only vouches for the configured users')));
+  assert.notEqual(JSON.parse((await import('node:fs')).readFileSync(path, 'utf8')).access_token, session.access_token, 'rotated tokens persisted');
+});

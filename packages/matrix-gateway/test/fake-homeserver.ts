@@ -20,6 +20,24 @@ export class FakeHomeserver {
   private pending = 0;
   private waiters = new Set<() => void>();
   requests: string[] = [];
+  /** OAuth (MAS-like): tokens issued by the fake authorization server. */
+  oauthTokens = new Map<string, { user: string; expired: boolean }>();
+  private refreshTokens = new Map<string, string>();
+  private devices = new Map<string, { userCode: string; scope: string; approvedBy?: string }>();
+  refreshes = 0;
+
+  /** The operator approves a device login in their browser, signed in as `user`. */
+  approveDevice(userCode: string, user: string): void {
+    for (const d of this.devices.values()) if (d.userCode === userCode) d.approvedBy = user;
+  }
+  /** Expire every OAuth access token (as matrix.org does after a few hours). */
+  expireOAuthTokens(): void { for (const t of this.oauthTokens.values()) t.expired = true; }
+  private issue(user: string): { access_token: string; refresh_token: string; expires_in: number } {
+    const at = `mat_${randomBytes(8).toString('hex')}`, rt = `mar_${randomBytes(8).toString('hex')}`;
+    this.oauthTokens.set(at, { user, expired: false });
+    this.refreshTokens.set(rt, user);
+    return { access_token: at, refresh_token: rt, expires_in: 300 };
+  }
 
   async start(): Promise<void> {
     this.server = createServer((q, r) => { void this.handle(q, r); });
@@ -105,7 +123,8 @@ export class FakeHomeserver {
       return this.isAsUser(u) ? u : null;
     }
     for (const [id, u] of this.users) if (u.token === tok) return id;
-    return null;
+    const o = this.oauthTokens.get(tok);
+    return o && !o.expired ? o.user : null;
   }
 
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -117,6 +136,40 @@ export class FakeHomeserver {
     this.requests.push(`${req.method} ${p}`);
     const json = (status: number, b: unknown) => { res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(b)); };
     const err = (status: number, errcode: string, error = '') => json(status, { errcode, error });
+    // OAuth 2.0 API (unauthenticated endpoints), MAS-style.
+    if (p === '/_matrix/client/v1/auth_metadata') {
+      return json(200, { issuer: `${this.base}/`, token_endpoint: `${this.base}/oauth2/token`, registration_endpoint: `${this.base}/oauth2/registration`,
+        device_authorization_endpoint: `${this.base}/oauth2/device`, grant_types_supported: ['authorization_code', 'refresh_token', 'urn:ietf:params:oauth:grant-type:device_code'] });
+    }
+    if (req.method === 'POST' && p === '/oauth2/registration') {
+      const b = JSON.parse(raw.toString('utf8'));
+      if (!b.client_uri?.startsWith('https://') || !b.grant_types?.includes('urn:ietf:params:oauth:grant-type:device_code')) return json(400, { error: 'invalid_client_metadata' });
+      return json(201, { client_id: `client-${randomBytes(4).toString('hex')}` });
+    }
+    if (req.method === 'POST' && (p === '/oauth2/device' || p === '/oauth2/token')) {
+      const f = Object.fromEntries(new URLSearchParams(raw.toString('utf8')));
+      if (p === '/oauth2/device') {
+        if (!/^urn:matrix:client:api:\* urn:matrix:client:device:[A-Z0-9]+$/.test(f.scope ?? '')) return json(400, { error: 'invalid_scope' });
+        const dc = randomBytes(8).toString('hex'), uc = randomBytes(3).toString('hex').toUpperCase();
+        this.devices.set(dc, { userCode: uc, scope: f.scope });
+        return json(200, { device_code: dc, user_code: uc, verification_uri: `${this.base}/link`, verification_uri_complete: `${this.base}/link?code=${uc}`, expires_in: 600, interval: 1 });
+      }
+      if (f.grant_type === 'urn:ietf:params:oauth:grant-type:device_code') {
+        const d = this.devices.get(f.device_code);
+        if (!d) return json(400, { error: 'invalid_grant' });
+        if (!d.approvedBy) return json(400, { error: 'authorization_pending' });
+        this.devices.delete(f.device_code);
+        return json(200, { token_type: 'Bearer', ...this.issue(d.approvedBy) });
+      }
+      if (f.grant_type === 'refresh_token') {
+        const user = this.refreshTokens.get(f.refresh_token);
+        if (!user) return json(400, { error: 'invalid_grant' });
+        this.refreshTokens.delete(f.refresh_token); // rotated, like MAS
+        this.refreshes++;
+        return json(200, { token_type: 'Bearer', ...this.issue(user) });
+      }
+      return json(400, { error: 'unsupported_grant_type' });
+    }
     const me = this.actor(req, url);
     if (!me) return err(401, 'M_UNKNOWN_TOKEN');
     const body = () => (raw.length && String(req.headers['content-type']).includes('json') ? JSON.parse(raw.toString('utf8')) : {});
@@ -125,6 +178,7 @@ export class FakeHomeserver {
     let m: RegExpExecArray | null;
 
     if (p === '/_matrix/client/v3/account/whoami') return json(200, { user_id: me });
+    if (p === '/_matrix/client/v3/joined_rooms') return json(200, { joined_rooms: [...this.rooms.values()].filter((r) => r.members.get(me) === 'join').map((r) => r.id) });
     if (req.method === 'POST' && p === '/_matrix/client/v3/register') {
       const id = `@${body().username}:${this.serverName}`;
       if (!this.isAsUser(id)) return err(400, 'M_EXCLUSIVE');

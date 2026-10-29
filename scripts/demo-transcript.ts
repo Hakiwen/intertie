@@ -8,7 +8,7 @@ const { values } = parseArgs({ options: { since: { type: 'string' }, out: { type
 const since = values.since ? Date.parse(values.since) : 0;
 type Line = { t: string; level: string; msg: string; side: string; [k: string]: unknown };
 const lines: Line[] = [];
-for (const side of ['a', 'b']) {
+for (const side of ['a', 'b', 'm']) {
   const p = `state/${side}/adapter.log`;
   if (!existsSync(p)) continue;
   for (const raw of readFileSync(p, 'utf8').split('\n')) {
@@ -17,14 +17,14 @@ for (const side of ['a', 'b']) {
   }
 }
 lines.sort((x, y) => x.t.localeCompare(y.t));
-const show = lines.filter((l) => l.msg.includes('→') || l.level === 'audit' || l.level === 'warn' || l.msg === 'slack connected' || l.msg === 'socket mode connected');
+const show = lines.filter((l) => l.msg.includes('→') || l.level === 'audit' || l.level === 'warn' || l.msg === 'slack connected' || l.msg === 'socket mode connected' || l.msg === 'matrix gateway started');
 const cell = (l: Line) => {
   const { t: _t, level: _l, msg: _m, side: _s, ...rest } = l;
   return Object.entries(rest).map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`).join(' ');
 };
 const md = [
-  `# Two-Slack demo transcript`, '',
-  `Generated ${new Date().toISOString()} from \`state/{a,b}/adapter.log\`. Adapter **A** (workspace A, port 8711) is the home; **B** (port 8712) accepted the invite.`,
+  `# Intertie demo transcript`, '',
+  `Generated ${new Date().toISOString()} from \`state/{a,b}/adapter.log\`. Adapter **A** (Slack workspace A, port 8711) is the home; **B** (Slack workspace B, port 8712) and **M** (the Matrix gateway, port 8713) accepted invites.`,
   `Each row is one relay step. Message text is never logged; ids let you match a row on one side to the other.`, '',
   '| time (UTC) | side | step | details |', '|---|---|---|---|',
   ...show.map((l) => `| ${l.t.slice(11, 23)} | ${l.side} | ${l.level === 'audit' ? `audit: ${l.msg}` : l.msg} | ${cell(l).replace(/\|/g, '\\|')} |`),

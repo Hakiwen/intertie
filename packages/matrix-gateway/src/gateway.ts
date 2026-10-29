@@ -10,7 +10,7 @@ import {
   type FileRef, type IntertieEvent, type Mention, type NodeOptions, type User,
 } from '@intertie/core';
 import { htmlToMd, mdToHtml, stripReplyFallback } from './format.ts';
-import { MatrixApi, MatrixError } from './matrix-api.ts';
+import { MatrixApi, MatrixError, type TokenSource } from './matrix-api.ts';
 
 export interface GatewayOptions {
   node: Omit<NodeOptions, 'capabilities'> & { capabilities?: string[] };
@@ -24,8 +24,10 @@ export interface GatewayOptions {
     serverName?: string;
     botLocalpart?: string;
     ghostPrefix?: string;
-    /** bot: the bot account's access token. */
-    accessToken?: string;
+    /** bot: the bot account's access token, or a self-refreshing OAuth session (intertie-matrix login). */
+    accessToken?: string | TokenSource;
+    /** Only these users' messages are shared (recommended in bot mode on a public server such as matrix.org). */
+    allowedUsers?: string[];
     /** Matrix servers whose users this org vouches for. Default: the gateway's own server. */
     localServers?: string[];
     /** Users allowed to run !intertie commands. Default: room power level >= 50. */
@@ -115,7 +117,21 @@ export class MatrixGateway {
 
   // ───────────────────────── admin ─────────────────────────
 
-  async share(room: string, name?: string): Promise<{ channel: string; invite: string }> {
+  /** Accepts a room id (!…), an alias (#…:server), or the name of a room the gateway has joined. */
+  async resolveRoom(ref: string): Promise<string> {
+    if (ref.startsWith('!')) return ref;
+    if (ref.startsWith('#') && ref.includes(':')) return (await this.api.req<{ room_id: string }>('GET', `/_matrix/client/v3/directory/room/${encodeURIComponent(ref)}`)).room_id;
+    const want = ref.replace(/^#/, '');
+    const { joined_rooms } = await this.api.req<{ joined_rooms: string[] }>('GET', '/_matrix/client/v3/joined_rooms');
+    for (const r of joined_rooms) {
+      const name = await this.api.state<{ name?: string }>(r, 'm.room.name').then((x) => x.name, () => undefined);
+      if (name === want) return r;
+    }
+    throw new IntertieError('bad_request', `no joined room named ${want} (invite ${this.botMxid} to it first)`);
+  }
+
+  async share(roomRef: string, name?: string): Promise<{ channel: string; invite: string }> {
+    const room = await this.resolveRoom(roomRef);
     const existing = this.channelFor(room);
     if (existing) {
       if (this.node.channel(existing)!.role !== 'home') throw new IntertieError('bad_request', 'this room is linked to a channel homed elsewhere');
@@ -128,7 +144,8 @@ export class MatrixGateway {
     return { channel: ch.id, invite: this.node.createInvite(ch.id) };
   }
 
-  async accept(invite: string, room: string): Promise<{ channel: string }> {
+  async accept(invite: string, roomRef: string): Promise<{ channel: string }> {
+    const room = await this.resolveRoom(roomRef);
     if (this.channelFor(room)) throw new IntertieError('bad_request', 'this room is already linked');
     await this.ensureJoined(room);
     const ch = await this.node.accept(invite);
@@ -137,7 +154,8 @@ export class MatrixGateway {
     return { channel: ch.id };
   }
 
-  async unshare(room: string): Promise<void> {
+  async unshare(roomRef: string): Promise<void> {
+    const room = await this.resolveRoom(roomRef);
     const id = this.channelFor(room);
     if (!id) throw new IntertieError('bad_request', 'not linked');
     const ch = this.node.channel(id)!;
@@ -179,6 +197,7 @@ export class MatrixGateway {
     return this.mode === 'appservice' && mxid.startsWith(`@${this.o.matrix.ghostPrefix ?? 'intertie_'}`) && mxid.endsWith(`:${this.serverName}`);
   }
   private isLocal(mxid: string): boolean {
+    if (this.o.matrix.allowedUsers?.length) return this.o.matrix.allowedUsers.includes(mxid);
     const server = mxid.slice(mxid.indexOf(':') + 1);
     return (this.o.matrix.localServers ?? [this.serverName]).includes(server);
   }
@@ -203,7 +222,8 @@ export class MatrixGateway {
     if (!ch || ch.state !== 'open') return;
     if (ev.type === 'm.room.encrypted') return void (await this.warnOnce(room, 'encrypted', '⚠️ An encrypted message was sent here. The gateway cannot read encrypted messages, so it was not shared.'));
     if (!this.isLocal(ev.sender)) {
-      return void (await this.warnOnce(room, `fed:${ev.sender}`, `⚠️ Messages from ${ev.sender} are not shared: this organization only vouches for users on ${(this.o.matrix.localServers ?? [this.serverName]).join(', ')}.`));
+      const who = this.o.matrix.allowedUsers?.length ? 'the configured users' : `users on ${(this.o.matrix.localServers ?? [this.serverName]).join(', ')}`;
+      return void (await this.warnOnce(room, `fed:${ev.sender}`, `⚠️ Messages from ${ev.sender} are not shared: this organization only vouches for ${who}.`));
     }
     if (this.eventFor(channel, ev.event_id)) return; // already relayed
     const id = derivedId(this.node.org, ev.event_id);

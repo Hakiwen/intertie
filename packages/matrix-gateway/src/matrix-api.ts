@@ -7,9 +7,12 @@ export class MatrixError extends Error {
   constructor(status: number, errcode: string, message: string) { super(`${errcode}: ${message}`); this.status = status; this.errcode = errcode; }
 }
 
+/** A token that can renew itself (OAuth sessions); a plain string never changes. */
+export interface TokenSource { token(): Promise<string>; refresh(): Promise<string> }
+
 export interface MatrixApiOptions {
   homeserver: string;
-  token: string;
+  token: string | TokenSource;
   /** Application Service mode: act as this user via identity assertion (?user_id=). */
   asUser?: string;
 }
@@ -18,21 +21,30 @@ const enc = encodeURIComponent;
 
 export class MatrixApi {
   readonly hs: string;
-  private token: string;
+  private auth: string | TokenSource;
   private asUser?: string;
-  constructor(o: MatrixApiOptions) { this.hs = o.homeserver.replace(/\/+$/, ''); this.token = o.token; this.asUser = o.asUser; }
+  constructor(o: MatrixApiOptions) { this.hs = o.homeserver.replace(/\/+$/, ''); this.auth = o.token; this.asUser = o.asUser; }
+
+  private bearer(): Promise<string> { return typeof this.auth === 'string' ? Promise.resolve(this.auth) : this.auth.token(); }
+  /** On an expired token, renew once (OAuth sessions only). */
+  private async renew(status: number, errcode?: string): Promise<boolean> {
+    if (typeof this.auth === 'string' || status !== 401 || (errcode && errcode !== 'M_UNKNOWN_TOKEN')) return false;
+    await this.auth.refresh();
+    return true;
+  }
 
   /** A client acting as another user under the same AS token. */
-  as(userId: string): MatrixApi { return new MatrixApi({ homeserver: this.hs, token: this.token, asUser: userId }); }
+  as(userId: string): MatrixApi { return new MatrixApi({ homeserver: this.hs, token: this.auth, asUser: userId }); }
 
   async req<T = any>(method: string, path: string, body?: unknown, o: { query?: Record<string, string>; raw?: Uint8Array; contentType?: string; timeoutMs?: number } = {}): Promise<T> {
     const u = new URL(this.hs + path);
     for (const [k, v] of Object.entries(o.query ?? {})) u.searchParams.set(k, v);
     if (this.asUser) u.searchParams.set('user_id', this.asUser);
+    let renewed = false;
     for (let attempt = 0; ; attempt++) {
       const res = await fetch(u, {
         method,
-        headers: { authorization: `Bearer ${this.token}`, ...(body !== undefined || o.raw ? { 'content-type': o.contentType ?? 'application/json' } : {}) },
+        headers: { authorization: `Bearer ${await this.bearer()}`, ...(body !== undefined || o.raw ? { 'content-type': o.contentType ?? 'application/json' } : {}) },
         body: o.raw ? new Uint8Array(o.raw) : body === undefined ? undefined : JSON.stringify(body),
         redirect: 'error',
         signal: AbortSignal.timeout(o.timeoutMs ?? 60_000),
@@ -43,6 +55,7 @@ export class MatrixApi {
         continue;
       }
       const j = await res.json().catch(() => ({})) as T & { errcode?: string; error?: string };
+      if (!res.ok && !renewed && await this.renew(res.status, j.errcode)) { renewed = true; continue; }
       if (!res.ok) throw new MatrixError(res.status, j.errcode ?? `HTTP_${res.status}`, j.error ?? '');
       return j;
     }
@@ -82,7 +95,8 @@ export class MatrixApi {
     for (const path of [`/_matrix/client/v1/media/download/${enc(m[1])}/${enc(m[2])}`, `/_matrix/media/v3/download/${enc(m[1])}/${enc(m[2])}`]) {
       const u = new URL(this.hs + path);
       if (this.asUser) u.searchParams.set('user_id', this.asUser);
-      const res = await fetch(u, { headers: { authorization: `Bearer ${this.token}` }, redirect: 'follow', signal: AbortSignal.timeout(60_000) });
+      let res = await fetch(u, { headers: { authorization: `Bearer ${await this.bearer()}` }, redirect: 'follow', signal: AbortSignal.timeout(60_000) });
+      if (res.status === 401 && await this.renew(401)) res = await fetch(u, { headers: { authorization: `Bearer ${await this.bearer()}` }, redirect: 'follow', signal: AbortSignal.timeout(60_000) });
       if (res.status === 404 && path.includes('/v1/')) continue;
       if (!res.ok) throw new MatrixError(res.status, `HTTP_${res.status}`, 'media download failed');
       if (Number(res.headers.get('content-length') ?? 0) > maxBytes) throw new Error('file too large');
