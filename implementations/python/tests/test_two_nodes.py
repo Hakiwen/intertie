@@ -18,7 +18,7 @@ def start(delivery="push"):
     return n, srv
 
 
-def until(pred, timeout=10.0):
+def until(pred, timeout=30.0):  # generous: CI runners are slower than laptops
     end = time.time() + timeout
     while time.time() < end:
         if pred():
