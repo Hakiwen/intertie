@@ -1,0 +1,11 @@
+{
+  "name": "@intertie/conformance",
+  "version": "0.1.0",
+  "description": "Intertie conformance runner: tests an implementation as home and as peer, emits a signed report.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": { "intertie-conformance": "./src/cli.ts" },
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@intertie/core": "0.1.0" },
+  "engines": { "node": ">=22.18" }
+}
