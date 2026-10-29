@@ -19,6 +19,8 @@ Machine-readable:
 - [`schemas/`](schemas/): JSON Schema (2020-12) for the discovery document and events.
 - [`test-vectors/`](test-vectors/): a fixed key, a request, and its exact signature base
   and signature, for checking an implementation's signing code.
+- [`model/`](model/): a TLA+ model of channel ordering, delivery, pull and invites,
+  model-checked with TLC in CI.
 
 ## Design in five lines
 

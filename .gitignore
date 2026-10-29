@@ -15,3 +15,6 @@ state/
 BRIEF.md
 NOTES.md
 suggestions/
+.cache/
+spec/model/states/
+spec/model/*_TTrace_*
