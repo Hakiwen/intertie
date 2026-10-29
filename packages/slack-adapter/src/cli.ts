@@ -61,7 +61,7 @@ async function main(): Promise<void> {
       const cfg = serveConfig(process.env, flags);
       const adapter = new SlackAdapter(cfg.adapter);
       await adapter.start(cfg.port, cfg.host);
-      saveAdmin(cfg.stateDir, { token: adapter.adminToken, port: cfg.port });
+      saveAdmin(cfg.stateDir, { token: adapter.adminToken, port: adapter.adminPort });
       const mode = cfg.adapter.slack.appToken ? 'socket mode' : `events API at ${cfg.adapter.node.endpoint.replace(/\/intertie$/, '')}/slack/events`;
       process.stderr.write(`intertie-slack: org ${adapter.node.org} · endpoint ${adapter.node.endpoint} · listening ${cfg.host}:${cfg.port} · ${mode}${flags.devInsecure ? ' · DEV-INSECURE (loopback only)' : ''}\n`);
       const shutdown = () => { void adapter.stop().then(() => process.exit(0)); };

@@ -47,6 +47,9 @@ export class SlackAdapter {
   private users = new Map<string, SlackUser>();
   private socket?: SocketModeClient;
   private server?: Server;
+  private adminServer?: Server;
+  /** Port of the loopback-only admin API (separate from the public endpoint). */
+  adminPort = 0;
   private queues = new Map<string, Promise<void>>();
   private pending = 0;
 
@@ -68,6 +71,11 @@ export class SlackAdapter {
     this.log('info', 'slack connected', { team: me.team_id, bot_user: me.user_id });
     this.server = createServer((req, res) => { void this.route(req, res); });
     await new Promise<void>((resolve) => this.server!.listen(port, host, resolve));
+    // The admin API gets its own loopback listener: behind a same-host reverse proxy every public
+    // request also arrives from 127.0.0.1, so a shared port could not tell them apart.
+    this.adminServer = createServer((req, res) => { const path = (req.url ?? '/').split('?')[0]; void this.admin(req, res, path); });
+    await new Promise<void>((resolve) => this.adminServer!.listen(0, '127.0.0.1', resolve));
+    this.adminPort = (this.adminServer.address() as { port: number }).port;
     this.node.start();
     if (this.o.slack.appToken) {
       this.socket = new SocketModeClient({
@@ -83,6 +91,7 @@ export class SlackAdapter {
   async stop(): Promise<void> {
     this.socket?.stop();
     if (this.server) { this.server.closeAllConnections(); await new Promise<void>((r) => this.server!.close(() => r())); }
+    if (this.adminServer) { this.adminServer.closeAllConnections(); await new Promise<void>((r) => this.adminServer!.close(() => r())); }
     await Promise.all([...this.queues.values()]);
     await this.node.stop();
   }
@@ -400,7 +409,6 @@ export class SlackAdapter {
   private async route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const path = (req.url ?? '/').split('?')[0];
     if (path === '/slack/events' || path === '/slack/commands') return this.slackHttp(req, res, path);
-    if (path.startsWith('/admin/')) return this.admin(req, res, path);
     return this.node.handle(req, res);
   }
 

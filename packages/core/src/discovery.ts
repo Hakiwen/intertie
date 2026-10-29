@@ -61,6 +61,8 @@ export class DiscoveryClient {
   private cache = new Map<string, CacheEntry>();
   private lastRefresh = new Map<string, number>();
   private inflight = new Map<string, Promise<CacheEntry>>();
+  /** Failed lookups are remembered for 60 s, so forged keyids cannot make us fetch on every request. */
+  private failures = new Map<string, { until: number; err: unknown }>();
   private o: DiscoveryClientOptions;
   constructor(o: DiscoveryClientOptions = {}) { this.o = o; }
 
@@ -94,7 +96,12 @@ export class DiscoveryClient {
     if (hit && !force && hit.expires > this.now()) return Promise.resolve(hit);
     const running = this.inflight.get(org);
     if (running) return running;
-    const p = this.load(org).finally(() => this.inflight.delete(org));
+    const failed = this.failures.get(org);
+    if (failed && failed.until > this.now()) return Promise.reject(failed.err);
+    const p = this.load(org)
+      .then((e) => { this.failures.delete(org); return e; })
+      .catch((err) => { this.failures.set(org, { until: this.now() + 60_000, err }); if (this.failures.size > 10_000) this.failures.clear(); throw err; })
+      .finally(() => this.inflight.delete(org));
     this.inflight.set(org, p);
     return p;
   }
@@ -114,5 +121,5 @@ export class DiscoveryClient {
     try { return (await this.entry(org)).keys.get(kid) ?? null; } catch { return null; }
   }
 
-  forget(org: string): void { this.cache.delete(org); }
+  forget(org: string): void { this.cache.delete(org); this.failures.delete(org); }
 }

@@ -56,6 +56,9 @@ export class MatrixGateway {
   private botMxid = '';
   private serverName = '';
   private server?: Server;
+  private adminServer?: Server;
+  /** Port of the loopback-only admin API (separate from the public endpoint). */
+  adminPort = 0;
   private queues = new Map<string, Promise<void>>();
   private pending = 0;
   private seenTxns = new Set<string>();
@@ -89,6 +92,11 @@ export class MatrixGateway {
     }
     this.server = createServer((req, res) => { void this.route(req, res); });
     await new Promise<void>((resolve) => this.server!.listen(port, host, resolve));
+    // The admin API gets its own loopback listener: behind a same-host reverse proxy every public
+    // request also arrives from 127.0.0.1, so a shared port could not tell them apart.
+    this.adminServer = createServer((req, res) => { const path = (req.url ?? '/').split('?')[0]; void this.admin(req, res, path); });
+    await new Promise<void>((resolve) => this.adminServer!.listen(0, '127.0.0.1', resolve));
+    this.adminPort = (this.adminServer.address() as { port: number }).port;
     this.node.start();
     if (this.mode === 'bot') void this.syncLoop();
     this.log('info', 'matrix gateway started', { mode: this.mode, bot: this.botMxid });
@@ -98,6 +106,7 @@ export class MatrixGateway {
     this.stopped = true;
     this.syncAbort?.abort();
     if (this.server) { this.server.closeAllConnections(); await new Promise<void>((r) => this.server!.close(() => r())); }
+    if (this.adminServer) { this.adminServer.closeAllConnections(); await new Promise<void>((r) => this.adminServer!.close(() => r())); }
     await Promise.all([...this.queues.values()]);
     await this.node.stop();
   }
@@ -536,7 +545,6 @@ export class MatrixGateway {
   private async route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const path = (req.url ?? '/').split('?')[0];
     if (path.startsWith('/_matrix/app/')) return this.appservice(req, res, path);
-    if (path.startsWith('/admin/')) return this.admin(req, res, path);
     return this.node.handle(req, res);
   }
 

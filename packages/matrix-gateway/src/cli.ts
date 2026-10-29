@@ -116,7 +116,7 @@ namespaces:
       const { opts, dir } = config();
       const gw = new MatrixGateway(opts);
       await gw.start(port, env.INTERTIE_LISTEN_HOST ?? '127.0.0.1');
-      saveAdmin(dir, { token: gw.adminToken, port });
+      saveAdmin(dir, { token: gw.adminToken, port: gw.adminPort });
       process.stderr.write(`intertie-matrix: org ${gw.node.org} · ${gw.mode} mode · listening 127.0.0.1:${port}${dev ? ' · DEV-INSECURE' : ''}\n`);
       const shutdown = () => { void gw.stop().then(() => process.exit(0)); };
       process.on('SIGINT', shutdown);

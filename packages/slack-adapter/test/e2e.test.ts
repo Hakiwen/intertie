@@ -156,6 +156,15 @@ test('slash command: non-admins are refused; admins get status', async () => {
   assert.match(A.ephemeral.at(-1)!.text, /Shared channel `c-.*` \(home, open\)/);
 });
 
+test('the admin API is not reachable on the public endpoint port', async () => {
+  const pub = await fetch(`http://${a.node.org}/admin/status`, { headers: { authorization: `Bearer ${a.adminToken}` } });
+  assert.notEqual(pub.status, 200);
+  const adm = await fetch(`http://127.0.0.1:${a.adminPort}/admin/status`, { headers: { authorization: `Bearer ${a.adminToken}` } });
+  assert.equal(adm.status, 200);
+  const bad = await fetch(`http://127.0.0.1:${a.adminPort}/admin/status`, { headers: { authorization: 'Bearer nope' } });
+  assert.equal(bad.status, 401);
+});
+
 test('unshare closes the channel on both sides', async () => {
   await a.unshare(CA);
   await settled();
