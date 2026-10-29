@@ -11,6 +11,14 @@
   - App package generator, validated against Microsoft's v1.25 schema.
   - `spec/teams-mapping.md`.
 - Shared Markdown ⇄ HTML conversion moved into core.
+- Slack "Add to Slack" multi-workspace host (`intertie-slack host`):
+  - OAuth v2 install with a signed state;
+  - per-workspace Intertie identity, key and database;
+  - bot tokens sealed with AES-256-GCM, bound to the team id;
+  - uninstall handling;
+  - a distributed manifest, deploy recipes (container, Fly.io, systemd), and
+    `docs/slack-oauth.md`.
+- Dev mode accepts `<name>.localhost:<port>` org names.
 
 ## v0.1.0 (2026-10-29)
 

@@ -137,10 +137,10 @@ does nothing else. There are still only two parties: the customer and the vendor
 3. Hand the two tokens to the vendor through the vendor's onboarding (never in chat).
 4. Run `/intertie accept <invite>` in the channel to share.
 
-Today each workspace is a separate app instance and token pair. One-click "Add to
-Slack" (a single distributed app installed by OAuth, with one adapter process serving
-many workspaces) is the next adapter feature. When it lands, the customer steps above
-shrink to "click Add to Slack, then `/intertie accept`".
+For more than a handful of customers, run the **multi-workspace host** instead
+([`slack-oauth.md`](slack-oauth.md)). It is one distributed app with an "Add to Slack"
+button, and one service that holds each workspace's identity and encrypted token. The
+customer steps then shrink to "click Add to Slack, then `/intertie accept`".
 
 > **Slack API terms:** the Slack org that installs the app is responsible for its own
 > compliance with Slack's API Terms.

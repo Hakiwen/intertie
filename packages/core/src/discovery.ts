@@ -1,7 +1,7 @@
 // Discovery documents (spec/core.md §3).
 import type { KeyObject } from 'node:crypto';
 import { IntertieError } from './errors.ts';
-import { isOrgName, KID_RE } from './ids.ts';
+import { isDevOrg, isOrgName, KID_RE } from './ids.ts';
 import { safeFetch } from './net.ts';
 import { importPublic, type PublicJwk } from './signing.ts';
 
@@ -21,7 +21,7 @@ export interface DiscoveryDoc {
 }
 
 export function discoveryUrl(org: string, devInsecure = false): string {
-  return `${devInsecure && !org.includes('.') ? 'http' : 'https'}://${org}${WELL_KNOWN_PATH}`;
+  return `${devInsecure && isDevOrg(org) ? 'http' : 'https'}://${org}${WELL_KNOWN_PATH}`;
 }
 
 /** Validate a fetched document against the rules in spec/core.md §3. Throws on failure. */

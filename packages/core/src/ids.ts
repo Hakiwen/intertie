@@ -6,7 +6,10 @@ export const EVENT_ID_RE = /^[A-Za-z0-9_-]{16,64}$/;
 export const KID_RE = /^[A-Za-z0-9._-]{1,64}$/;
 // Lowercase DNS name in A-label form: labels of 1-63 chars, no leading/trailing hyphen.
 const DNS_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
-const DEV_RE = /^(?:localhost|127\.0\.0\.1|\[::1\]):[0-9]{1,5}$/;
+const DEV_RE = /^(?:(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*localhost|127\.0\.0\.1|\[::1\]):[0-9]{1,5}$/;
+
+/** Dev-mode loopback org names (`localhost:8701`, `t1.localhost:8701`): served over plain http. */
+export function isDevOrg(s: string): boolean { return DEV_RE.test(s); }
 
 export function isOrgName(s: string, devInsecure = false): boolean {
   if (DNS_RE.test(s) && s.includes('.')) return true;

@@ -2,6 +2,8 @@
 // intertie-slack: run the Slack adapter, and manage shared channels on a running one.
 import { parseArgs } from 'node:util';
 import { SlackAdapter } from './adapter.ts';
+import { SlackHost } from './host.ts';
+import { makeLogger } from '@intertie/core';
 import { readAdmin, saveAdmin, serveConfig } from './config.ts';
 
 const USAGE = `intertie-slack: share Slack channels with other organizations over Intertie
@@ -12,6 +14,7 @@ const USAGE = `intertie-slack: share Slack channels with other organizations ove
   intertie-slack unshare <slack-channel-id> [--state DIR]
   intertie-slack status  [--state DIR]
   intertie-slack discovery [--env FILE] [--port N] [--dev-insecure]  prints /.well-known/intertie
+  intertie-slack host    [--env FILE] [--port N]     multi-workspace "Add to Slack" service (docs/slack-oauth.md)
 
 Environment (or --env FILE): SLACK_BOT_TOKEN, SLACK_APP_TOKEN (Socket Mode) or
 SLACK_SIGNING_SECRET (Events API), INTERTIE_ORG, INTERTIE_ENDPOINT, INTERTIE_PORT,
@@ -65,6 +68,23 @@ async function main(): Promise<void> {
       const mode = cfg.adapter.slack.appToken ? 'socket mode' : `events API at ${cfg.adapter.node.endpoint.replace(/\/intertie$/, '')}/slack/events`;
       process.stderr.write(`intertie-slack: org ${adapter.node.org} · endpoint ${adapter.node.endpoint} · listening ${cfg.host}:${cfg.port} · ${mode}${flags.devInsecure ? ' · DEV-INSECURE (loopback only)' : ''}\n`);
       const shutdown = () => { void adapter.stop().then(() => process.exit(0)); };
+      process.on('SIGINT', shutdown);
+      process.on('SIGTERM', shutdown);
+      return;
+    }
+    case 'host': {
+      const need = (k: string) => { const v = process.env[k]; if (!v) throw new Error(`missing ${k}`); return v; };
+      const port = flags.port ?? Number(process.env.INTERTIE_PORT ?? 8700);
+      const stateDir = process.env.INTERTIE_STATE_DIR ?? './state/host';
+      const host = new SlackHost({
+        clientId: need('SLACK_CLIENT_ID'), clientSecret: need('SLACK_CLIENT_SECRET'), signingSecret: need('SLACK_SIGNING_SECRET'),
+        appToken: process.env.SLACK_APP_TOKEN || undefined, publicBase: need('INTERTIE_PUBLIC_BASE').replace(/\/+$/, ''),
+        orgSuffix: need('INTERTIE_ORG_SUFFIX'), tokenKey: need('SLACK_TOKEN_KEY'), stateDir, apiUrl: process.env.SLACK_API_URL || undefined,
+        log: makeLogger(stateDir, flags.verbose),
+      });
+      await host.start(port, process.env.INTERTIE_LISTEN_HOST ?? '127.0.0.1');
+      process.stderr.write(`intertie-slack host: ${host.workspaces().length} workspace(s) · install at ${process.env.INTERTIE_PUBLIC_BASE}/slack/install · orgs <team>.${process.env.INTERTIE_ORG_SUFFIX} · listening :${port}\n`);
+      const shutdown = () => { void host.stop().then(() => process.exit(0)); };
       process.on('SIGINT', shutdown);
       process.on('SIGTERM', shutdown);
       return;

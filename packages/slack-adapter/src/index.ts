@@ -4,3 +4,4 @@ export * from './emoji.ts';
 export * from './slack-api.ts';
 export * from './socket-mode.ts';
 export * from './config.ts';
+export * from './host.ts';

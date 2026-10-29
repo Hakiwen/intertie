@@ -1,0 +1,20 @@
+# systemd unit for a small VM. Put the app in /opt/intertie, secrets in /etc/intertie/host.env (mode 600),
+# and TLS for connect.vendor.example + *.connect.vendor.example in front (Caddy, nginx).
+[Unit]
+Description=Intertie Slack host (multi-workspace)
+After=network-online.target
+
+[Service]
+User=intertie
+WorkingDirectory=/opt/intertie
+EnvironmentFile=/etc/intertie/host.env
+Environment=INTERTIE_STATE_DIR=/var/lib/intertie INTERTIE_PORT=8700
+ExecStart=/usr/bin/node packages/slack-adapter/src/cli.ts host
+Restart=always
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/intertie
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

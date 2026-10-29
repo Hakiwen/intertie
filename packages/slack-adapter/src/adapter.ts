@@ -66,10 +66,24 @@ export class SlackAdapter {
 
   // ───────────────────────── lifecycle ─────────────────────────
 
-  async start(port: number, host = '127.0.0.1'): Promise<void> {
+  /** Embedded in a multi-workspace host (SlackHost): no listeners, the host routes requests here. */
+  async startEmbedded(): Promise<void> {
+    await this.identify();
+    this.node.start();
+  }
+
+  private async identify(): Promise<void> {
     const me = await this.slack.call<{ user_id: string; bot_id: string; team_id: string }>('auth.test');
     this.bot = { userId: me.user_id, botId: me.bot_id, teamId: me.team_id };
     this.log('info', 'slack connected', { team: me.team_id, bot_user: me.user_id });
+  }
+
+  /** Entry points for a host that receives Slack traffic for many workspaces. */
+  handleSlackEvent(event: Record<string, any>, eventId: string): void { this.enqueueSlackEvent(event, eventId); }
+  handleSlashCommand(p: SlashPayload): Promise<void> { return this.onSlashCommand(p); }
+
+  async start(port: number, host = '127.0.0.1'): Promise<void> {
+    await this.identify();
     this.server = createServer((req, res) => { void this.route(req, res); });
     await new Promise<void>((resolve) => this.server!.listen(port, host, resolve));
     // The admin API gets its own loopback listener: behind a same-host reverse proxy every public
@@ -521,7 +535,7 @@ export class SlackAdapter {
   }
 }
 
-interface SlashPayload { command: string; text: string; user_id: string; channel_id: string; response_url?: string }
+export interface SlashPayload { command: string; text: string; user_id: string; channel_id: string; response_url?: string }
 
 function safeEqual(a: string, b: string): boolean {
   const x = Buffer.from(a), y = Buffer.from(b);

@@ -28,7 +28,7 @@ export class SlackApi {
     for (let attempt = 0; ; attempt++) {
       const res = await fetch(`${this.baseUrl}/${method}`, {
         method: 'POST',
-        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/x-www-form-urlencoded' },
+        headers: { ...(token && token !== 'none' ? { authorization: `Bearer ${token}` } : {}), 'content-type': 'application/x-www-form-urlencoded' },
         body: form,
         redirect: 'error',
       });

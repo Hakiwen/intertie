@@ -4,7 +4,7 @@
 import { createServer, type Server } from 'node:http';
 import { sign as edSign } from 'node:crypto';
 import {
-  contentDigest, generateKey, importPrivate, IntertieNode, newId, parseInvite, PROTOCOL_VERSION, safeFetch, signatureBase,
+  contentDigest, generateKey, importPrivate, IntertieNode, isDevOrg, newId, parseInvite, PROTOCOL_VERSION, safeFetch, signatureBase,
   signRequest, validateDiscovery, type DiscoveryDoc, type IntertieEvent, type PrivateJwk,
 } from '@intertie/core';
 import type { TestResult } from './report.ts';
@@ -125,7 +125,7 @@ export async function runHomeSuite(o: HomeSuiteOptions): Promise<{ results: Test
   const r1 = o.r1;
   let doc!: DiscoveryDoc;
   await s.t('core.discovery.valid', 'core', async () => {
-    const proto = dev && !inv.home.includes('.') ? 'http' : 'https';
+    const proto = dev && isDevOrg(inv.home) ? 'http' : 'https';
     const r = await safeFetch(`${proto}://${inv.home}/.well-known/intertie`, { devInsecure: dev, maxBytes: 64 * 1024 });
     expect(r.status === 200, `HTTP ${r.status}`);
     expect(String(r.headers['content-type'] ?? '').includes('application/json'), 'content-type must be application/json');

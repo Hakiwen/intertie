@@ -25,6 +25,9 @@ export class FakeSlack {
   base = '';
   teams = new Map<string, Team>();
   calls: Call[] = [];
+  /** A distributed app (OAuth). */
+  app = { clientId: 'cid-123', clientSecret: 'csecret-456', signingSecret: 'app-signing-secret' };
+  private codes = new Map<string, string>(); // code → team token
   private pending = 0;
   private seq = 0;
   private uploads = new Map<string, { team: string; name: string; bytes?: Buffer }>();
@@ -41,6 +44,9 @@ export class FakeSlack {
   get apiUrl(): string { return `${this.base}/api`; }
   idle(): boolean { return this.pending === 0; }
 
+  /** Emit an arbitrary event (e.g. app_uninstalled) to the team's app. */
+  emitRaw(t: Team, event: Record<string, unknown>): void { this.emit(t, event); }
+
   addTeam(id: string, users: Team['users'], channels: string[]): Team {
     const t: Team = {
       id, token: `xoxb-fake-${id}`, botUserId: `UBOT${id}`, botId: `B${id}`, signingSecret: `secret-${id}`,
@@ -49,6 +55,9 @@ export class FakeSlack {
     this.teams.set(t.token, t);
     return t;
   }
+
+  /** The user clicked Allow in Slack's OAuth screen for this workspace: Slack redirects with this code. */
+  issueCode(t: Team): string { const c = `code-${++this.seq}`; this.codes.set(c, t.token); return c; }
 
   messages(t: Team, channel: string): FakeMsg[] { return (t.channels.get(channel) ?? []).filter((m) => !m.deleted); }
   callsFor(t: Team, method: string): Call[] { return this.calls.filter((c) => c.team === t.id && c.method === method); }
@@ -162,6 +171,15 @@ export class FakeSlack {
     if (url.pathname === '/api/apps.connections.open') {
       const t = [...this.teams.values()].find((x) => x.appToken && req.headers.authorization === `Bearer ${x.appToken}`);
       return t ? json({ ok: true, url: `${this.base.replace('http', 'ws')}/ws/${t.id}` }) : json({ ok: false, error: 'invalid_auth' });
+    }
+    if (url.pathname === '/api/oauth.v2.access') {
+      const p = Object.fromEntries(new URLSearchParams(raw.toString('utf8')));
+      if (p.client_id !== this.app.clientId || p.client_secret !== this.app.clientSecret) return json({ ok: false, error: 'invalid_client_id' });
+      const tok = this.codes.get(p.code);
+      if (!tok || !p.redirect_uri) return json({ ok: false, error: 'invalid_code' });
+      this.codes.delete(p.code);
+      const t = [...this.teams.values()].find((x) => x.token === tok)!;
+      return json({ ok: true, access_token: t.token, token_type: 'bot', scope: 'chat:write', bot_user_id: t.botUserId, app_id: 'A1', team: { id: t.id, name: `${t.id} Inc` }, enterprise: null });
     }
     const team = [...this.teams.values()].find((t) => req.headers.authorization === `Bearer ${t.token}`);
     if (url.pathname.startsWith('/files-pri/')) {

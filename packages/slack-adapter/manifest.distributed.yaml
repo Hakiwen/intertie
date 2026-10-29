@@ -1,0 +1,52 @@
+# Slack app manifest for the MULTI-WORKSPACE host ("Add to Slack", OAuth). Replace connect.vendor.example
+# with your host's public name. Then: Manage Distribution → Activate Public Distribution (no Marketplace
+# listing is required). See docs/slack-oauth.md. Single-workspace installs use manifest.yaml instead.
+display_information:
+  name: Intertie
+  description: Share a channel with another organization, directly, with no intermediary.
+  background_color: "#1f3a5f"
+features:
+  bot_user:
+    display_name: Intertie
+    always_online: true
+  slash_commands:
+    - command: /intertie
+      url: https://connect.vendor.example/slack/commands
+      description: Share this channel with another organization
+      usage_hint: share | accept <invite> | status | unshare
+      should_escape: false
+oauth_config:
+  redirect_urls:
+    - https://connect.vendor.example/slack/oauth/callback
+  scopes:
+    bot:
+      - channels:history
+      - channels:read
+      - channels:join
+      - groups:history
+      - groups:read
+      - chat:write
+      - chat:write.customize
+      - reactions:read
+      - reactions:write
+      - files:read
+      - files:write
+      - users:read
+      - commands
+settings:
+  event_subscriptions:
+    request_url: https://connect.vendor.example/slack/events
+    bot_events:
+      - message.channels
+      - message.groups
+      - reaction_added
+      - reaction_removed
+      - member_joined_channel
+      - member_left_channel
+      - app_uninstalled
+      - tokens_revoked
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false
