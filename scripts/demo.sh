@@ -3,6 +3,7 @@
 #   scripts/demo.sh up        start both adapters in the background (logs in state/{a,b}/adapter.log)
 #   scripts/demo.sh link [#channel]   share #channel (default #intertie-demo) from A, accept it in B
 #   scripts/demo.sh status    show links on both sides
+#   scripts/demo.sh transcript   write docs/demo/transcript-*.md from both adapter logs
 #   scripts/demo.sh down      stop both adapters
 set -eu
 cd "$(dirname "$0")/.."
@@ -30,10 +31,13 @@ case "${1:-}" in
   status)
     for s in a b; do echo "== $s"; $CLI status --state "state/$s"; done
     ;;
+  transcript)
+    node scripts/demo-transcript.ts ${2:+--since "$2"}
+    ;;
   down)
     for s in a b; do
       if [ -f "state/$s/pid" ]; then kill "$(cat "state/$s/pid")" 2>/dev/null && echo "stopped $s" || true; rm -f "state/$s/pid"; fi
     done
     ;;
-  *) sed -n '2,7p' "$0"; exit 2 ;;
+  *) sed -n '2,8p' "$0"; exit 2 ;;
 esac
