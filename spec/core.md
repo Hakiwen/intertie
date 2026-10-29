@@ -343,7 +343,11 @@ If all checks pass, the home assigns `seq = last + 1`, stores the event, returns
 included. The origin uses that copy to learn its own event's position.
 
 **At a peer**, events arrive with a `seq`. The peer MUST check that the authenticated
-org is the channel's home [`not_home`]. Then it applies the events in `seq` order and
+org is the channel's home [`not_home`].
+
+Right after a successful accept, a peer SHOULD pull once (§7.3) from `channel.seq`. A
+push can arrive before the accept response is processed, and the peer answers that
+push `unknown_channel`. Then it applies the events in `seq` order and
 treats an already-applied `seq` as a `duplicate`.
 
 - If it sees a gap (a `seq` greater than its last plus 1), it accepts the event, holds
@@ -360,6 +364,11 @@ Delivery is **at-least-once**. The event `id` and `seq` make it idempotent.
 - Retry rules:
   - Network errors, `5xx`, `408` and `429` are retried, honouring `Retry-After`.
   - Any other `4xx` is not retried.
+  - Exception: when the home is delivering to a peer, every failure is retried with
+    the same backoff, `4xx` included. Dropping deliveries would leave gaps, and a fixed
+    misconfiguration should recover on its own. The 72 h dead rule below applies.
+  - A peer whose submission gets any other `4xx` drops that submission and reports
+    the failure to its user.
   - Backoff is exponential with jitter: 1 s, 2 s, 4 s, … capped at 5 min.
 - Peers retry their submissions the same way.
 - If a peer has accepted nothing for **72 h**, it is **dead**. The home stops pushing to

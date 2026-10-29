@@ -1,0 +1,33 @@
+{
+  "description": "Intertie v0.1 signature test vectors. The key is public test material: never use it for anything real. Ed25519 is deterministic, so signatures must match byte for byte.",
+  "key": {
+    "kty": "OKP",
+    "crv": "Ed25519",
+    "kid": "test-1",
+    "x": "KHL4OLX6Zzvg6utvvOvOmF2a7ZkAyZ9rg87V7IfuBWQ",
+    "d": "Sp7_Hnqle-jzfXfWVeaFOavTjRtbu5-jZM8Mm9LrAsI",
+    "seed_hex": "4a9eff1e7aa57be8f37d77d655e68539abd38d1b5bbb9fa364cf0c9bd2eb02c2"
+  },
+  "post": {
+    "method": "POST",
+    "url": "https://connect.acme.example/intertie/events",
+    "keyid": "globex.example#test-1",
+    "created": 1761764580,
+    "nonce": "Qm9yZ2VzIHdhcyBoZXJlLCAyMDI2",
+    "body": "{\"events\":[{\"id\":\"01JBDXQ4M6V2S9K3Y8T7R5N0PA\",\"type\":\"message.create\",\"channel\":\"c-7f3a@acme.example\",\"origin\":\"globex.example\",\"sender\":{\"id\":\"u-81f2@globex.example\",\"name\":\"Gail Ito\"},\"ts\":\"2026-10-29T19:03:00Z\",\"body\":{\"text\":\"hello\"}}]}",
+    "content_digest": "sha-256=:wDDTV2qoxKktPnNxa1MfoVpSXT3AS5sbPadnvPJKwA4=:",
+    "signature_base": "\"@method\": POST\n\"@target-uri\": https://connect.acme.example/intertie/events\n\"content-digest\": sha-256=:wDDTV2qoxKktPnNxa1MfoVpSXT3AS5sbPadnvPJKwA4=:\n\"@signature-params\": (\"@method\" \"@target-uri\" \"content-digest\");created=1761764580;keyid=\"globex.example#test-1\";alg=\"ed25519\";nonce=\"Qm9yZ2VzIHdhcyBoZXJlLCAyMDI2\";tag=\"intertie\"",
+    "signature_input": "sig1=(\"@method\" \"@target-uri\" \"content-digest\");created=1761764580;keyid=\"globex.example#test-1\";alg=\"ed25519\";nonce=\"Qm9yZ2VzIHdhcyBoZXJlLCAyMDI2\";tag=\"intertie\"",
+    "signature": "sig1=:DmMvxTU/GoYQZ2ppzj6Mqf9Hb0WSUwlf4A2qSP9qfqQmk190oZevL2fIXtRqIpmIuRH8QkkzAr5U2QagNepkBg==:"
+  },
+  "get": {
+    "method": "GET",
+    "url": "https://connect.acme.example/intertie/channels/c-7f3a%40acme.example/events?since=41&limit=100&wait=0",
+    "keyid": "globex.example#test-1",
+    "created": 1761764580,
+    "nonce": "bm9uY2UtZm9yLXRoZS1HRVQtdmVjdG9y",
+    "signature_base": "\"@method\": GET\n\"@target-uri\": https://connect.acme.example/intertie/channels/c-7f3a%40acme.example/events?since=41&limit=100&wait=0\n\"@signature-params\": (\"@method\" \"@target-uri\");created=1761764580;keyid=\"globex.example#test-1\";alg=\"ed25519\";nonce=\"bm9uY2UtZm9yLXRoZS1HRVQtdmVjdG9y\";tag=\"intertie\"",
+    "signature_input": "sig1=(\"@method\" \"@target-uri\");created=1761764580;keyid=\"globex.example#test-1\";alg=\"ed25519\";nonce=\"bm9uY2UtZm9yLXRoZS1HRVQtdmVjdG9y\";tag=\"intertie\"",
+    "signature": "sig1=:xhDJppuNtMLAjWQPnYeCoUATS6Zmi/Rx6grLgWAK6d/HizgzD2JSMYrkZLl0dCovTITRW1GT0xhGFrCdYC3BCQ==:"
+  }
+}

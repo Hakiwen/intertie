@@ -1,0 +1,23 @@
+{
+  "name": "intertie-monorepo",
+  "private": true,
+  "description": "Intertie: an open protocol for shared channels between organizations, no intermediary.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run typecheck && npm run unit",
+    "unit": "node --test --test-reporter=spec 'packages/*/test/**/*.test.ts'",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "ajv": "^8.20.0",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@intertie/core",
+  "version": "0.1.0",
+  "description": "Intertie protocol core: signing, discovery, events, home/peer engine.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "engines": { "node": ">=22.18" }
+}
