@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+# secrets: Slack tokens and private keys never leave this machine
+.env
+.env.*
+!.env.example
+*.key
+keys/
+state/
+# LifeOS-internal working files, not part of the public repo
+BRIEF.md
+NOTES.md
+suggestions/
