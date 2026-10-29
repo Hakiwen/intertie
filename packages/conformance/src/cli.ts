@@ -72,10 +72,13 @@ async function main(): Promise<void> {
     if (!values.invite) throw new Error('--invite required');
     const a = await identity(0);
     const b = dev ? await identity(1) : null;
+    const extra: { close: () => Promise<void> }[] = [];
+    let n = 2;
+    const spawn = dev ? async () => { const x = await identity(n++); extra.push(x); return x.id; } : undefined;
     try {
-      const { results, subject } = await runHomeSuite({ invite: values.invite, r1: a.id, r2: b?.id, devInsecure: dev });
+      const { results, subject } = await runHomeSuite({ invite: values.invite, r1: a.id, r2: b?.id, spawn, devInsecure: dev });
       emit(finish(results, { org: subject.org, endpoint: subject.endpoint }, ['home']));
-    } finally { await a.close(); await b?.close(); }
+    } finally { await a.close(); await b?.close(); for (const x of extra) await x.close(); }
     return;
   }
   if (cmd === 'peer') {

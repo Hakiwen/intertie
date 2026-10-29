@@ -20,10 +20,12 @@ async function ident(name: string): Promise<Identity> {
 test('reference home passes the home suite', async () => {
   const subject = await ident('subject');
   const ch = subject.node.createChannel({ name: 'conf' });
-  const { results } = await runHomeSuite({ invite: subject.node.createInvite(ch.id), r1: await ident('r1'), r2: await ident('r2'), devInsecure: true });
+  const { results } = await runHomeSuite({ invite: subject.node.createInvite(ch.id), r1: await ident('r1'), r2: await ident('r2'), spawn: () => ident('x'), devInsecure: true });
   const failed = results.filter((r) => !r.pass);
   assert.deepEqual(failed, [], JSON.stringify(failed, null, 1));
-  assert.ok(results.filter((r) => !r.skipped).length >= 35, `ran ${results.length}`);
+  const sec = results.filter((r) => r.level === 'security' && !r.skipped);
+  assert.ok(sec.length >= 20, `ran ${sec.length} security tests`);
+  assert.ok(results.filter((r) => !r.skipped).length >= 55, `ran ${results.length}`);
 });
 
 test('reference peer passes the peer suite', async () => {
