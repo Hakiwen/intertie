@@ -39,7 +39,7 @@ Then do the same in the other workspace.
 In a terminal on the hub, run:
 
 ```sh
-cd ~/lifeos/projects/shared-channels
+cd intertie            # your clone of this repo
 scripts/setup-env.sh a     # workspace A: paste xoxb-…, then xapp-… (input is hidden)
 scripts/setup-env.sh b     # workspace B
 ```

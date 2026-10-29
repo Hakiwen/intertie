@@ -10,7 +10,7 @@ coverage/
 *.key
 keys/
 state/
-# LifeOS-internal working files, not part of the public repo
+# local working files, not part of the repo
 BRIEF.md
 NOTES.md
 suggestions/
