@@ -1,0 +1,52 @@
+# Slack app manifest for the Intertie adapter (Socket Mode: no public URL needed).
+# Create the app at https://api.slack.com/apps -> "Create New App" -> "From a manifest",
+# pick the workspace, paste this file. See docs/slack-setup.md.
+display_information:
+  name: Intertie
+  description: Share a channel with another organization, directly, with no intermediary.
+  long_description: >-
+    Intertie links a channel in this workspace to a shared channel with another organization,
+    over an open protocol. This app is run by your own organization (or by the organization you
+    are sharing with, if you chose that). Messages, edits, deletions, threads, reactions and
+    files in linked channels are copied to the participating organizations only. It reads only
+    the channels an admin explicitly shares with /intertie, and never reads channel history.
+  background_color: "#1f3a5f"
+features:
+  bot_user:
+    display_name: Intertie
+    always_online: true
+  slash_commands:
+    - command: /intertie
+      description: Share this channel with another organization
+      usage_hint: share | accept <invite> | status | unshare
+      should_escape: false
+oauth_config:
+  scopes:
+    bot:
+      - channels:history
+      - channels:read
+      - channels:join
+      - groups:history
+      - groups:read
+      - chat:write
+      - chat:write.customize
+      - reactions:read
+      - reactions:write
+      - files:read
+      - files:write
+      - users:read
+      - commands
+settings:
+  event_subscriptions:
+    bot_events:
+      - message.channels
+      - message.groups
+      - reaction_added
+      - reaction_removed
+      - member_joined_channel
+      - member_left_channel
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false
