@@ -15,6 +15,7 @@ A conformance claim names a protocol version, one or more **roles**, and a set o
 | `files` | Sends and serves files by reference and inline; fetches with signed GETs. |
 | `mentions` | Emits mentions and maps them to native notifications. |
 | `members` | Announces its own roster and tracks remote rosters. |
+| `security` | Refuses the adversarial requests in the runner's security suite. Examples: signature-profile downgrades (alg, tag, label, extra members or components), forged and cross-org keys, future timestamps, short nonces, query tampering, malformed keyids, discovery redirects or oversize or wrong-org documents, protocol-major downgrades, id conflicts, path traversal, malformed bodies, and pre-join or replayed reads. It also handles key rotation. **Registry listings are expected to claim `security`.** |
 
 | role | meaning |
 |---|---|
