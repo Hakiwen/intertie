@@ -132,11 +132,14 @@ a Slack Connect-style shared channel with another organization? The constraints:
   [Hunton summary](https://www.hunton.com/insights/legal/salesforce-locks-down-slack-data-time-to-review-your-slack-api-terms)).
   - Self-hosted mode is clean: the customer's own app moves the customer's own messages
     to a party the customer chose. That is the same thing Slack Connect does.
-  - Counterparty-hosted mode makes the counterparty a "third party" app developer under
-    Slack's terms, and the counterparty's internal tool will store what it receives.
-    Per-message relay is not bulk export, but this deserves a careful read before anyone
-    markets the counterparty-hosted mode. **Recommendation: lead the docs with
-    self-hosted. Ship counterparty-hosted with a terms caveat.** (Not legal advice.)
+  - Counterparty-hosted ("vendor-hosted") mode makes the counterparty a "third party"
+    app developer under Slack's terms, and the counterparty's tool stores what it
+    receives. Per-message relay is not bulk export.
+  - **Decision (Ben, 2026-10-29): "I'm ok with the flag, if the customers deal with
+    the terms."** Both modes are documented as complete, first-class paths, with
+    self-hosted listed first. The vendor-hosted section carries one plain note: the
+    Slack org that installs the app is responsible for its own compliance with Slack's
+    API Terms.
 
 ### What an adapter cannot do that Slack Connect does
 
@@ -231,15 +234,17 @@ implementation cost:
    appservice, run by one of the parties, would give them reach into Intertie peers and
    vice versa. This is the same adapter pattern as Slack, and it is a cheap way to
    avoid being seen as a competing island.
+   *Update 2026-10-29: Ben asked for it, and it is being built as
+   `packages/matrix-gateway` (`spec/matrix-mapping.md`).*
 3. **Don't over-promise E2EE.** We are not making a weaker Matrix, and the docs should
    say so. The security story is authenticated, integrity-protected, TLS-only,
    domain-bound transport between exactly the participants. That is the same trust
    model as Slack Connect, where Slack itself sees everything; we are strictly better
    because no vendor sits in the middle. MLS stays on the roadmap for native-to-native
    channels only.
-4. **Counterparty-hosted mode carries Slack terms risk** (see above). The brief treats
-   both deployment models as equal. I'd rank self-hosted first in the docs until the
-   terms question is settled.
+4. **Counterparty-hosted mode carries Slack terms risk** (see above). I proposed ranking
+   self-hosted first until the terms question was settled. Ben settled it: both modes
+   are first-class, and the Slack org owns its own terms compliance.
 5. **Pull fallback should be in v0.1, as a capability, not optional-later.** Many
    internal tools run behind a VPN with no inbound HTTPS. For them, a pull peer
    (`GET …/events?since=`) is the difference between "can join" and "can't". It is

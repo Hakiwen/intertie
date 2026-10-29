@@ -126,6 +126,7 @@ these rules:
 - Slack tokens grant workspace-wide scopes. The adapter MUST act only on channels the
   workspace's admin has explicitly linked, and MUST ignore events from every other
   channel.
-- Counterparty-hosted mode: the counterparty holds the Slack org's bot token. That is a
-  real grant of trust. The Slack org's admin MUST be told this at install time, and
-  should prefer self-hosting.
+- Vendor-hosted mode: the counterparty runs the adapter and holds the Slack org's bot
+  token. That is a deliberate grant of trust by the installing org. The admin consents
+  to it by installing the vendor's app, and can revoke it by uninstalling. This does
+  not make a third party: the vendor is a participant in the channel.

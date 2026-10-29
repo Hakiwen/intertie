@@ -62,7 +62,7 @@ an edit, a delete, reactions and a file, in both directions.
 
 ## Part 2: running it for real
 
-### Self-hosted (recommended)
+### Self-hosted
 
 The Slack org runs the adapter itself, so its Slack token never leaves its
 infrastructure.
@@ -98,13 +98,52 @@ infrastructure.
   and `https://connect.example.com/slack/commands`;
 - set `SLACK_SIGNING_SECRET` in place of `SLACK_APP_TOKEN`.
 
-### Counterparty-hosted
+### Vendor-hosted
 
-The org whose tool is *not* Slack (say, the vendor) hosts the adapter, and the Slack
-org installs the vendor's app. That still involves only two parties, but **the vendor
-then holds the Slack org's bot token**. That is a real grant of trust, and it may also
-make the vendor a "third party" under Slack's API Terms (see
-[`docs/landscape.md`](landscape.md)). Self-hosting is the better default.
+In this mode the org on the other side, say a vendor whose own tool speaks Intertie,
+runs the adapter for its customer's Slack workspace. The customer installs the app and
+does nothing else. There are still only two parties: the customer and the vendor.
+
+**What the vendor does:**
+
+1. **Ship a manifest.** Start from
+   [`manifest.yaml`](../packages/slack-adapter/manifest.yaml) and change the
+   `display_information` (name, description, colour) to your brand. Keep the scopes and
+   events as they are.
+2. **Give each customer workspace an Intertie identity.** Two options:
+   - The default is a name under your own domain, for example
+     `bigco.connect.vendor.example`. You serve its `/.well-known/intertie` from the
+     adapter.
+   - If the customer wants its own name, it publishes the output of
+     `intertie-slack discovery` at `https://bigco.example/.well-known/intertie`. That
+     document points `endpoint` at your host, which is the same delegation described
+     in self-hosted step 4.
+3. **Run one adapter instance per customer workspace**, each with its own state
+   directory. In each instance:
+
+   ```sh
+   INTERTIE_ORG=bigco.connect.vendor.example    INTERTIE_ENDPOINT=https://bigco.connect.vendor.example/intertie    INTERTIE_STATE_DIR=/srv/intertie/bigco    SLACK_BOT_TOKEN=xoxb-… SLACK_APP_TOKEN=xapp-…    node packages/slack-adapter/src/cli.ts serve --port 9101
+   ```
+
+4. **Share a channel.** Your own tool, the home, creates the channel and an invite. The
+   customer's admin runs `/intertie accept <invite>` in the Slack channel to link.
+
+   It also works in reverse: the customer runs `/intertie share`, and your tool accepts.
+
+**What the customer does:**
+
+1. Create the app from the vendor's manifest. This is the same as Part 1, step 2.
+2. Install it.
+3. Hand the two tokens to the vendor through the vendor's onboarding (never in chat).
+4. Run `/intertie accept <invite>` in the channel to share.
+
+Today each workspace is a separate app instance and token pair. One-click "Add to
+Slack" (a single distributed app installed by OAuth, with one adapter process serving
+many workspaces) is the next adapter feature. When it lands, the customer steps above
+shrink to "click Add to Slack, then `/intertie accept`".
+
+> **Slack API terms:** the Slack org that installs the app is responsible for its own
+> compliance with Slack's API Terms.
 
 ### What your Slack users will see
 
