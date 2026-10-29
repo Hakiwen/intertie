@@ -219,6 +219,13 @@ export async function runHomeSuite(o: HomeSuiteOptions): Promise<{ results: Test
     expect(typeof r.json.seq === 'number' && r.json.seq >= evs[evs.length - 1].seq!, 'response seq must be the latest');
     return `${evs.length} events`;
   });
+  await s.t('core.pull.no-prejoin-history', 'core', async () => {
+    const r = await raw(r1, 'GET', `${chUrl}?since=0&limit=100`, undefined, { dev });
+    expect(r.status === 200, `pull: ${desc(r)}`);
+    const evs = r.json.events as IntertieEvent[];
+    expect(evs.every((e) => e.seq! > ch.seq), `since=0 returned events from before the join (seq ${evs[0]?.seq} <= ${ch.seq})`);
+    return `earliest seq ${evs[0]?.seq}`;
+  });
   await s.t('core.pull.limit', 'core', async () => {
     const r = await raw(r1, 'GET', `${chUrl}?since=${ch.seq}&limit=1`, undefined, { dev });
     expect(r.status === 200 && r.json.events.length === 1, `limit=1 returned ${r.json?.events?.length}`);
@@ -255,6 +262,7 @@ export async function runHomeSuite(o: HomeSuiteOptions): Promise<{ results: Test
     expectResult(await submit(ev('peer.leave', { org: r1.node.org, reason: 'left' }, { sender: undefined })), 'accepted');
     return expectResult(await submit(ev('message.create', { text: 'after leave' })), 'rejected', ['not_participant']);
   });
+  await s.t('core.accept.no-reuse-after-leave', 'core', async () => expectStatus(await raw(r1, 'POST', `${ep}/accept`, { token: inv.token }, { dev }), 404, 'invalid_invite'));
   return { results: s.results, subject: doc };
 }
 
