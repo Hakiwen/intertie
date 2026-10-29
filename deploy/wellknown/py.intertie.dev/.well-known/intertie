@@ -1,0 +1,22 @@
+{
+  "intertie": "0.1",
+  "org": "py.intertie.dev",
+  "display_name": "intertie-py",
+  "endpoint": "https://py.intertie.dev/intertie",
+  "delivery": "push",
+  "keys": [
+    {
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "kid": "k1",
+      "x": "BDTemkWaVTIr40szLrz_JoYbXL4aSfuRGkAoOC_UDoM"
+    }
+  ],
+  "capabilities": [
+    "threads",
+    "reactions"
+  ],
+  "limits": {
+    "max_body_bytes": 1048576
+  }
+}
