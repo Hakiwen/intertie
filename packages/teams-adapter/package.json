@@ -1,11 +1,19 @@
 {
   "name": "@intertie/teams-adapter",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Intertie adapter for Microsoft Teams: a Teams app (Bot Framework, resource-specific consent) the Teams org installs in its own team.",
   "license": "Apache-2.0",
   "type": "module",
-  "bin": { "intertie-teams": "./src/cli.ts" },
-  "exports": { ".": "./src/index.ts" },
-  "dependencies": { "@intertie/core": "0.1.0" },
-  "engines": { "node": ">=22.18" }
+  "bin": {
+    "intertie-teams": "./src/cli.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@intertie/core": "0.2.0"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
 }

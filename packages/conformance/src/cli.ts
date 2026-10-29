@@ -7,7 +7,7 @@ import { generateKey, IntertieNode, type PrivateJwk } from '@intertie/core';
 import { signReport, verifyReport, type Report, type TestResult } from './report.ts';
 import { runHomeSuite, runPeerSuite, serveIdentity, type Identity } from './runner.ts';
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const USAGE = `intertie-conformance: conformance runner for Intertie v0.1
 
   intertie-conformance home --invite <intertie:org/token> [options]   test the subject's home role

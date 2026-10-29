@@ -2,9 +2,17 @@
 import { readFileSync } from 'node:fs';
 const tag = process.argv[2] ?? 'v?';
 const sums = readFileSync(new URL('../dist/release/SHA256SUMS', import.meta.url), 'utf8').trim();
+// The CHANGELOG section for this tag leads the notes.
+const changelog = readFileSync(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
+const start = changelog.indexOf(`## ${tag} `);
+const section = start < 0 ? '' : changelog.slice(changelog.indexOf('\n', start) + 1, (() => { const n = changelog.indexOf('\n## ', start + 1); return n < 0 ? undefined : n; })()).trim();
 console.log(`Intertie ${tag}
 
-Artifacts: the four package tarballs (\`npm pack\`) and a source archive of the tagged tree. Each has
+${section}
+
+## Artifacts and verification
+
+Artifacts: the package tarballs (\`npm pack\`) and a source archive of the tagged tree. Each has
 a CycloneDX and an SPDX SBOM generated from the lockfile, SLSA build provenance, and an SBOM
 attestation per format, all signed keylessly with Sigstore by this repository's release workflow.
 (GitHub's automatic "Source code" downloads cannot be attested; use \`intertie-${tag.slice(1)}-src.tar.gz\`.)

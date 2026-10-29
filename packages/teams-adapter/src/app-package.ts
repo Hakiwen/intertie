@@ -17,7 +17,7 @@ export function manifest(o: ManifestOptions): Record<string, unknown> {
   return {
     $schema: `https://developer.microsoft.com/en-us/json-schemas/teams/v${mv}/MicrosoftTeams.schema.json`,
     manifestVersion: mv,
-    version: o.version ?? '0.1.0',
+    version: o.version ?? '0.2.0',
     id: o.appId,
     developer: dev,
     name: { short: (o.name ?? 'Intertie').slice(0, 30), full: 'Intertie shared channels' },

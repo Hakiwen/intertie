@@ -33,15 +33,15 @@ For each artifact:
 You need the GitHub CLI (`gh` ≥ 2.49):
 
 ```sh
-gh release download v0.1.0 --repo Hakiwen/intertie
+gh release download v0.2.0 --repo Hakiwen/intertie
 sha256sum -c SHA256SUMS
 
 # Provenance: built by Hakiwen/intertie's release workflow from a tagged commit.
-gh attestation verify intertie-core-0.1.0.tgz --owner Hakiwen
+gh attestation verify intertie-core-0.2.0.tgz --owner Hakiwen
 
 # The SBOMs are attested for this exact file.
-gh attestation verify intertie-core-0.1.0.tgz --owner Hakiwen --predicate-type https://cyclonedx.org/bom
-gh attestation verify intertie-core-0.1.0.tgz --owner Hakiwen --predicate-type https://spdx.dev/Document/v2.3
+gh attestation verify intertie-core-0.2.0.tgz --owner Hakiwen --predicate-type https://cyclonedx.org/bom
+gh attestation verify intertie-core-0.2.0.tgz --owner Hakiwen --predicate-type https://spdx.dev/Document/v2.3
 ```
 
 To verify offline, pass `--bundle <file>.sigstore.jsonl` (attached to every release).

@@ -1,11 +1,19 @@
 {
   "name": "@intertie/slack-adapter",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Intertie adapter for Slack: a Slack app the Slack org installs in its own workspace.",
   "license": "Apache-2.0",
   "type": "module",
-  "bin": { "intertie-slack": "./src/cli.ts" },
-  "exports": { ".": "./src/index.ts" },
-  "dependencies": { "@intertie/core": "0.1.0" },
-  "engines": { "node": ">=22.18" }
+  "bin": {
+    "intertie-slack": "./src/cli.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@intertie/core": "0.2.0"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
 }
