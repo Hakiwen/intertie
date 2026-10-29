@@ -1,7 +1,7 @@
 // Configuration from environment and flags. Secrets come only from the environment / env file.
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { generateKey, type PrivateJwk, type Logger } from '@intertie/core';
+import { loadAdminToken, loadOrCreateKey, makeLogger } from '@intertie/core';
 import type { AdapterOptions } from './adapter.ts';
 
 export interface ServeConfig {
@@ -9,27 +9,6 @@ export interface ServeConfig {
   port: number;
   host: string;
   stateDir: string;
-}
-
-const SECRET_RE = /(xox[a-z]-[A-Za-z0-9-]+|xapp-[A-Za-z0-9-]+)/g;
-
-/** JSON-lines logger on stderr that never prints Slack tokens. Audit lines also go to audit.log. */
-export function makeLogger(stateDir: string | null, verbose = false): Logger {
-  return (level, msg, data) => {
-    if (level === 'debug' && !verbose) return;
-    const line = JSON.stringify({ t: new Date().toISOString(), level, msg, ...data }).replace(SECRET_RE, '[redacted]');
-    process.stderr.write(line + '\n');
-    if (level === 'audit' && stateDir) writeFileSync(join(stateDir, 'audit.log'), line + '\n', { flag: 'a', mode: 0o600 });
-  };
-}
-
-export function loadOrCreateKey(stateDir: string): PrivateJwk {
-  const p = join(stateDir, 'key.json');
-  if (existsSync(p)) return JSON.parse(readFileSync(p, 'utf8'));
-  const k = generateKey(new Date().toISOString().slice(0, 7));
-  writeFileSync(p, JSON.stringify(k) + '\n', { mode: 0o600 });
-  chmodSync(p, 0o600);
-  return k;
 }
 
 export function serveConfig(env: NodeJS.ProcessEnv, flags: { port?: number; devInsecure?: boolean; state?: string; verbose?: boolean }): ServeConfig {
@@ -61,19 +40,5 @@ export function serveConfig(env: NodeJS.ProcessEnv, flags: { port?: number; devI
   };
 }
 
-export function loadAdminToken(stateDir: string): string | null {
-  const p = join(stateDir, 'admin.json');
-  return existsSync(p) ? (JSON.parse(readFileSync(p, 'utf8')) as { token: string }).token : null;
-}
 
-export function saveAdmin(stateDir: string, a: { token: string; port: number }): void {
-  const p = join(stateDir, 'admin.json');
-  writeFileSync(p, JSON.stringify(a) + '\n', { mode: 0o600 });
-  chmodSync(p, 0o600);
-}
-
-export function readAdmin(stateDir: string): { token: string; port: number } {
-  const p = join(stateDir, 'admin.json');
-  if (!existsSync(p)) throw new Error(`no running adapter state in ${stateDir} (start it with: intertie-slack serve)`);
-  return JSON.parse(readFileSync(p, 'utf8'));
-}
+export { loadAdminToken, readAdmin, saveAdmin } from '@intertie/core';

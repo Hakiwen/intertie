@@ -11,6 +11,8 @@ Read in this order:
 4. [`conformance.md`](conformance.md): levels, roles, the runner, signed reports.
 5. [`slack-mapping.md`](slack-mapping.md): how the Slack adapter maps every event
    (informative).
+6. [`matrix-mapping.md`](matrix-mapping.md): the same for the Matrix gateway
+   (informative).
 
 Machine-readable:
 

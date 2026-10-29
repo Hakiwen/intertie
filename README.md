@@ -23,6 +23,9 @@ parties runs. Messages move only between the participating organizations.
 - **Core** covers messages, edits, deletes and thread replies, plus invite, accept,
   leave and close. Core reads in about 20 minutes. Threads, reactions, files, mentions
   and members are optional capabilities.
+- **Matrix** rooms join through a gateway the org runs itself. It works as an
+  Application Service with ghost users on your own homeserver, or as a single bot
+  account. See [`spec/matrix-mapping.md`](spec/matrix-mapping.md).
 - **Slack** can't be a native peer, so the Slack org installs the Intertie app in its
   own workspace. Remote people show up with their name, avatar and org. The ways this
   differs from Slack Connect are listed in [`spec/slack-mapping.md`](spec/slack-mapping.md#what-cannot-map).
@@ -34,7 +37,7 @@ Status: **v0.1 draft, private.**
 You need Node ≥ 22.18. There are no runtime dependencies.
 
 ```sh
-npm install && make check                   # typecheck + tests (two fake Slacks end to end, conformance)
+npm install && make check                   # typecheck + tests (fake Slack and fake Matrix end to end, conformance)
 
 # Two native orgs, each running the toy chat:
 node packages/toy-chat/src/server.ts --port 8721 --dev-insecure --name Acme &
@@ -79,6 +82,7 @@ Inside Slack, admins use `/intertie share`, `/intertie accept <invite>`,
 | [`spec/`](spec/) | The protocol: core, capabilities, security, conformance, Slack mapping, schemas, test vectors (CC-BY-4.0) |
 | [`packages/core`](packages/core) | Reference engine: signing, discovery, SSRF-safe fetch, home/peer state machine, pull, files |
 | [`packages/slack-adapter`](packages/slack-adapter) | The Slack app: Socket Mode or Events API, `/intertie`, admin CLI, manifest |
+| [`packages/matrix-gateway`](packages/matrix-gateway) | Matrix rooms: Application Service (ghost users) or bot account; `!intertie`, CLI, registration generator |
 | [`packages/conformance`](packages/conformance) | Conformance runner for the home and peer roles; signed reports |
 | [`packages/toy-chat`](packages/toy-chat) | A ~130-line native web chat, standing in for "your internal tool" |
 | [`docs/landscape.md`](docs/landscape.md) | Matrix, MIMI, Slack Connect, Mattermost, Teams: what exists, and why a new small protocol |
